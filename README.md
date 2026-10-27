@@ -47,12 +47,8 @@ npm run watch
 ### Project structure
 
 ```
-src/
-  code.ts       main thread: selection monitoring, postMessage to/from UI, invokes alignment
-  align.ts      pure functions for alignment math (Figma-API independent, unit testable)
-  ui/
-    ui.html
-    ui.ts       layer list rendering, key-object selection, direction button handlers
+code.ts       main thread: selection monitoring, postMessage to/from UI, alignment math, invokes alignment
+ui.html       inline JS: layer list rendering, key-object selection, direction button handlers
 manifest.json
 tsconfig.json
 package.json

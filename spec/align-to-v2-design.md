@@ -42,7 +42,7 @@ absoluteBoundingBox（ページ空間の絶対座標）
 ## 5. データフロー
 
 ```
-[code.ts（メインスレッド）]                [ui.html / ui.ts]
+[code.ts（メインスレッド）]                [ui.html]
 selection changeを検知 ─────────────→ 選択中レイヤー一覧を表示
                                         ユーザーが key object をクリック指定
                                         整列方向ボタンを押下
@@ -70,48 +70,46 @@ key object ID + direction を受信 ←──── postMessageで送信
 ## 7. ファイル構成
 
 ```
-src/
-  code.ts          … メインスレッド。selection監視、UIとのpostMessage、実処理の呼び出し
-  align.ts          … 整列計算の純粋関数群（Figma APIに非依存、単体テスト可能）
-  ui/
-    ui.html
-    ui.ts            … 選択レイヤー一覧表示、key object指定、方向ボタンのイベント処理
+code.ts          … メインスレッド。selection監視、UIとのpostMessage、整列計算、実処理の呼び出し
+ui.html          … 選択レイヤー一覧表示、key object指定、方向ボタンのイベント処理（インラインJS）
 manifest.json
 tsconfig.json
 package.json
 ```
 
-`align.ts` を純粋関数として分離するのは、Figma APIに依存しない座標計算ロジック（絶対座標の算出・相対座標への変換）を単体でテストしやすくするため。
+Figma Plugin API は単一スクリプトとして実行されるため、バンドラを導入せず `code.ts` 単体で完結させる。整列計算ロジックは `code.ts` 内の内部関数として実装。UI ロジックも `ui.html` にインラインで記述する。
 
-## 8. align.ts 主要関数（シグネチャ）
+## 8. 整列計算の主要関数（code.ts 内の内部関数）
 
 ```typescript
 type AlignDirection = "left" | "right" | "top" | "bottom" | "centerH" | "centerV";
 
-interface Rect {
+type Rect = {
   x: number;
   y: number;
   width: number;
   height: number;
-}
+};
 
 /**
  * key object の絶対座標を基準に、移動対象レイヤーの新しい絶対座標（ページ空間）を算出する
  */
-function computeTargetPosition(
+const computeTargetPosition = (
   keyObjectBox: Rect,   // key object の absoluteBoundingBox
   movingBox: Rect,      // 移動対象レイヤーの absoluteBoundingBox
   direction: AlignDirection
-): { x: number; y: number };
+): { x: number; y: number } => { /* ... */ };
 
 /**
  * ページ空間の絶対座標を、親の absoluteBoundingBox を使って親相対座標（node.x, node.y相当）に変換する
  */
-function absoluteToRelative(
+const absoluteToRelative = (
   absolutePos: { x: number; y: number },
   parentAbsoluteBox: Rect
-): { x: number; y: number };
+): { x: number; y: number } => { /* ... */ };
 ```
+
+これらはエクスポートせず `code.ts` 内でのみ使用する。
 
 ## 9. 仕様上の考慮点
 

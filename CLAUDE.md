@@ -26,17 +26,13 @@ These are imported, so they are always loaded. Keep them short and imperative.
 
 - TypeScript
 - Figma Plugin API (`api: "1.0.0"`)
-- Custom UI (`ui.html` + `ui.ts`)
+- Custom UI (`ui.html` with inline JS)
 
 ## File Structure
 
 ```
-src/
-  code.ts       main thread: selection monitoring, postMessage to/from UI, invokes alignment
-  align.ts      pure functions for alignment math (Figma-API independent, unit testable)
-  ui/
-    ui.html
-    ui.ts       layer list rendering, key-object selection, direction button handlers
+code.ts       main thread: selection monitoring, postMessage to/from UI, alignment math, invokes alignment
+ui.html       inline JS: layer list rendering, key-object selection, direction button handlers
 manifest.json
 tsconfig.json
 package.json
@@ -69,11 +65,11 @@ All calculations happen in page-absolute space, so alignment works correctly reg
 
 ## Code Conventions
 
-- Keep `align.ts` free of Figma API dependencies so it stays pure and unit testable (`computeTargetPosition`, `absoluteToRelative`).
+- Keep the alignment math (`computeTargetPosition`, `absoluteToRelative`) as Figma-API-independent helper functions at the top of `code.ts`.
 - UI strings are English.
 - Prefer explicit types (e.g. `AlignDirection`, `Rect`).
-- No network access needed — do not add `networkAccess` to `manifest.json`.
+- The plugin needs no network access — keep `networkAccess.allowedDomains` as `["none"]` in `manifest.json`.
 
 ## Testing
 
-`align.ts` should be covered by unit tests (pure functions). Update this section with the actual test command once test tooling is in place.
+No unit tests are configured. Verify behavior manually in the Figma editor (e.g. align layers that belong to different parent frames and confirm the positions match the key object).
