@@ -66,6 +66,13 @@
         background: var(--figma-color-bg-warning, #ffcd29);
         color: var(--figma-color-text-warning, #1e1e1e);
       }
+      #close-after {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        cursor: pointer;
+      }
       #directions {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -137,6 +144,10 @@
     <section id="prompt" hidden>
       Choose a key object: the layer the others align to.
     </section>
+    <label id="close-after">
+      <input type="checkbox" id="close-after-input" checked />
+      Close after aligning
+    </label>
     <section id="directions">
       <button type="button" data-direction="left">Left</button>
       <button type="button" data-direction="centerH">Center H</button>
@@ -172,6 +183,7 @@
       const statusEl = document.getElementById("status");
       const warningEl = document.getElementById("warning");
       const closeEl = document.getElementById("close");
+      const closeAfterEl = document.getElementById("close-after-input");
       const directionButtons = document.querySelectorAll(
         "#directions button"
       );
@@ -280,6 +292,7 @@
                 type: "align",
                 keyObjectId: state.keyObjectId,
                 direction: button.dataset.direction,
+                closeAfter: closeAfterEl.checked,
               },
             },
             "*"

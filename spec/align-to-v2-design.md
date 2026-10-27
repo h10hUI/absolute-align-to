@@ -48,6 +48,9 @@ selection changeを検知 ─────────────→ 選択中�
                                         整列方向ボタンを押下
 key object ID + direction を受信 ←──── postMessageで送信
 整列計算・ノードのx, y書き換え
+（closeAfter = UI のチェックボックス「Close after aligning」の状態も同梱）
+closeAfter かつスキップ・警告無し ─→ closePlugin(トースト) で終了
+それ以外 ───────────────→ align-result を UI に返して表示（UI は開いたまま）
 ```
 
 ## 6. manifest.json（設計イメージ）
@@ -151,7 +154,9 @@ const absoluteToRelative = (
 - **key object が GROUP / BOOLEAN_OPERATION のときは子孫もスキップ**：これらの型は bounds が子から導出されるため、子孫を動かすと key object 自身の box が変化して基準がずれる。FRAME の子は枠の端に揃える用途を維持するため移動可とする（FRAME は明示サイズを持ち、子移動では resize しない）。
 - **書き込み順序**：読み取り（Pass1）と書き込み（Pass2）を分離し、Pass2 では書き込み直前に key object の box と親の絶対原点を読み直す。祖先を先に書き、子はその後に書く（`getNodeDepth` 昇順）。
 - **key box の変化検知**：整列中に key object の box が変化した場合（例：共有グループの再配流）は、結果に warning を付けて検証を促す。
-- **`moved` の数え方**：書き込み後に `node.x / node.y` が実質変化したレイヤーのみを `moved` として数える（微小変化は許容誤差以下なら数えない）。変化が無くスキップも無い場合は UI に「Already aligned.」を表示する。
+- **`moved` の数え方**：書き込み後に `node.x / node.y` が実質変化したレイヤーのみを `moved` として数える（微小変化は許容誤差以下なら数えない）。変化が無くスキップも無い場合は「Already aligned.」を通知する（下記「整列後の終了」参照）。
+
+**整列後の終了**：UI の「Close after aligning」チェックボックス（初期値 ON、方向ボタンの上）が ON で、かつスキップも警告も無く正常終了した場合は `figma.closePlugin(message)` でプラグインを閉じ、結果をトーストで通知する（`Aligned N layer(s).`、変化が無ければ `Already aligned.`）。OFF の場合、およびスキップまたは key box 変化の警告がある場合は閉じず、UI に結果・理由を表示する（連続操作向け）。チェック状態は永続化しないため、プラグインを開き直すと ON に戻る。`closeAfter` は `align` メッセージで送り、`code.ts` 側は `true` のときだけ有効とみなす。
 
 ## 10. UI設計（構成イメージ）
 
@@ -162,6 +167,7 @@ const absoluteToRelative = (
 │  ● Rectangle 2  [Key object]  │
 │  ○ Text Layer                 │
 ├─────────────────────────────┤
+│ [x] Close after aligning      │
 │ [Left] [Center H] [Right]     │
 │ [Top]  [Center V] [Bottom]    │
 └─────────────────────────────┘

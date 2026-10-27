@@ -234,7 +234,12 @@ type AlignErrorMessage = {
 
 type UiToMainMessage =
   | { type: "ui-ready" }
-  | { type: "align"; keyObjectId: unknown; direction: unknown }
+  | {
+      type: "align";
+      keyObjectId: unknown;
+      direction: unknown;
+      closeAfter: unknown;
+    }
   | { type: "close" };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -309,7 +314,14 @@ const sendSelectionUpdate = (): void => {
 //     are skipped ONLY when the key's box is child-derived (GROUP / boolean
 //     op), since moving such a child would otherwise resize/move the key.
 
-const handleAlign = (rawKeyObjectId: unknown, rawDirection: unknown): void => {
+const handleAlign = (
+  rawKeyObjectId: unknown,
+  rawDirection: unknown,
+  rawCloseAfter: unknown,
+): void => {
+  // Only an explicit `true` opts in to closing; anything else keeps the UI open.
+  const closeAfter = rawCloseAfter === true;
+
   if (!isAlignDirection(rawDirection)) {
     postAlignError("Unknown align direction.");
     return;
@@ -455,6 +467,18 @@ const handleAlign = (rawKeyObjectId: unknown, rawDirection: unknown): void => {
     ? "The key object's box changed during alignment (a shared group likely reflowed). Verify the result."
     : undefined;
 
+  // "Close after aligning" is on and the run was clean (nothing skipped, no
+  // warning): close the plugin and report via a toast. Otherwise keep the UI
+  // open so the user can read the details or keep aligning.
+  if (closeAfter && skipped.length === 0 && !warning) {
+    figma.closePlugin(
+      moved > 0
+        ? `Aligned ${moved} layer${moved === 1 ? "" : "s"}.`
+        : "Already aligned.",
+    );
+    return;
+  }
+
   postAlignResult(moved, skipped, warning);
 };
 
@@ -477,7 +501,7 @@ figma.ui.onmessage = (raw: unknown) => {
       sendSelectionUpdate();
       return;
     case "align":
-      handleAlign(raw.keyObjectId, raw.direction);
+      handleAlign(raw.keyObjectId, raw.direction, raw.closeAfter);
       return;
     case "close":
       figma.closePlugin();
