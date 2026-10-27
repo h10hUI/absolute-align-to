@@ -105,6 +105,11 @@ const absoluteToRelative = (
 // Every SceneNode in the installed typings declares x/y, so this is a plain
 // runtime check rather than a type guard (a guard would narrow the negative
 // branch to `never`).
+//
+// Defensive check only: with the installed typings every SceneNode exposes x/y,
+// so `nonMovableIds` in `selection-updated` is always empty in practice. It is
+// kept (and typed) so a future node kind without x/y degrades to a warning
+// instead of a crash; the UI branch for it is dormant by design.
 const isMovableNode = (node: SceneNode): boolean =>
   "x" in node && "y" in node;
 
@@ -185,13 +190,19 @@ const isAncestorOf = (candidate: SceneNode, node: SceneNode): boolean => {
 /**
  * Nodes whose absoluteBoundingBox is computed from their descendants' bounds,
  * so moving a descendant changes the node's own box (size and/or origin).
- * GROUP and BOOLEAN_OPERATION are the common cases. A FRAME has an explicit
- * size and does NOT resize when its children move (auto-layout frames resize,
- * but their children are already skipped as Auto Layout children), so children
- * of a FRAME remain valid move targets.
+ * GROUP, BOOLEAN_OPERATION and COMPONENT_SET are the cases we handle: moving a
+ * variant inside a component set repositions/resizes the set's box. A FRAME has
+ * an explicit size and does NOT resize when its children move (auto-layout
+ * frames resize, but their children are already skipped as Auto Layout
+ * children), so children of a FRAME remain valid move targets.
+ * INSTANCE is deliberately absent: its box follows the main component's size,
+ * and direct x/y writes on instance children throw, so those failures are
+ * surfaced as skips instead.
  */
 const isChildDerivedBoxNode = (node: BaseNode): boolean =>
-  node.type === "GROUP" || node.type === "BOOLEAN_OPERATION";
+  node.type === "GROUP" ||
+  node.type === "BOOLEAN_OPERATION" ||
+  node.type === "COMPONENT_SET";
 
 /**
  * Distance from the page (0 for page-direct nodes, larger for deeper nodes).
@@ -421,13 +432,24 @@ const handleAlign = (
   // convert those failures into skip warnings instead of aborting the batch.
   let moved = 0;
   let keyRectChanged = false;
+  let processed = 0;
   for (const { node, originalRect } of planned) {
+    processed += 1;
+    // A write can throw halfway (node.x succeeded, node.y did not), leaving the
+    // layer on a single axis. This is deliberately NOT rolled back: the key
+    // object never moved, so re-running the align after the cause is fixed
+    // converges, and the layer is reported in `skipped` either way.
     try {
       const freshKeyRect = getAbsoluteRect(keyNode);
       if (!freshKeyRect) {
+        // Stop the batch, but account for the layers that will not be touched.
+        const remaining = planned.length - processed;
         skipped.push({
           id: node.id,
-          reason: `${node.name}: key object lost its bounding box — stopped`,
+          reason:
+            remaining > 0
+              ? `${node.name}: key object lost its bounding box — stopped (${remaining} layer${remaining === 1 ? "" : "s"} not processed)`
+              : `${node.name}: key object lost its bounding box — stopped`,
         });
         break;
       }
@@ -463,8 +485,18 @@ const handleAlign = (
     }
   }
 
+  // The in-loop checks run before each write, so a change caused by the LAST
+  // write would otherwise go unnoticed. Re-check once more after the loop.
+  const finalKeyRect = getAbsoluteRect(keyNode);
+  if (finalKeyRect && !rectsEqual(finalKeyRect, keyRect)) {
+    keyRectChanged = true;
+  }
+
+  // Deliberately no speculation about the cause: the box may change because a
+  // shared container (group, component set) reflowed, so the user is asked to
+  // verify rather than told what happened.
   const warning = keyRectChanged
-    ? "The key object's box changed during alignment (a shared group likely reflowed). Verify the result."
+    ? "The key object's box changed during alignment (a shared container reflowed). Verify the result."
     : undefined;
 
   // "Close after aligning" is on and the run was clean (nothing skipped, no
