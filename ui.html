@@ -1,17 +1,378 @@
-<h2>Rectangle Creator</h2>
-<p>Count: <input id="count" type="number" value="5"></p>
-<button id="create">Create</button>
-<button id="cancel">Cancel</button>
-<script>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 12px;
+        font-family: Inter, "Segoe UI", system-ui, sans-serif;
+        font-size: 11px;
+        color: var(--figma-color-text, #1e1e1e);
+        background: var(--figma-color-bg, #ffffff);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      h2 {
+        margin: 0;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      ul#layers {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-height: 220px;
+        overflow-y: auto;
+      }
+      ul#layers li label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      ul#layers li label:hover {
+        background: var(--figma-color-bg-secondary, #f5f5f5);
+      }
+      ul#layers input[type="radio"] {
+        margin: 0;
+      }
+      ul#layers .name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .badge {
+        font-size: 9px;
+        padding: 1px 5px;
+        border-radius: 999px;
+        background: var(--figma-color-bg-brand, #0d99ff);
+        color: var(--figma-color-text-onbrand, #ffffff);
+      }
+      .badge.warn {
+        background: var(--figma-color-bg-warning, #ffcd29);
+        color: var(--figma-color-text-warning, #1e1e1e);
+      }
+      #close-after {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        cursor: pointer;
+      }
+      #directions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+      }
+      #directions button {
+        padding: 6px 4px;
+        font-size: 10px;
+        border: 1px solid var(--figma-color-border, #dcdcdc);
+        background: var(--figma-color-bg, #ffffff);
+        color: var(--figma-color-text, #1e1e1e);
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      #directions button:hover:not(:disabled) {
+        background: var(--figma-color-bg-secondary, #f5f5f5);
+      }
+      #directions button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      #empty,
+      #prompt {
+        font-size: 10px;
+        padding: 6px 8px;
+        border-radius: 4px;
+      }
+      #empty {
+        color: var(--figma-color-text-secondary, #666);
+        text-align: center;
+        padding: 12px 8px;
+      }
+      #prompt {
+        color: var(--figma-color-text-secondary, #666);
+        background: var(--figma-color-bg-secondary, #f5f5f5);
+      }
+      #status {
+        font-size: 10px;
+        color: var(--figma-color-text-success, #14ae5c);
+      }
+      #warning {
+        font-size: 10px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        background: var(--figma-color-bg-warning, #fff1c2);
+        color: var(--figma-color-text-warning, #6e5b00);
+      }
+      #close {
+        align-self: flex-end;
+        font-size: 10px;
+        padding: 4px 8px;
+        border: none;
+        background: transparent;
+        color: var(--figma-color-text-secondary, #666);
+        cursor: pointer;
+      }
+      #close:hover {
+        color: var(--figma-color-text, #1e1e1e);
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Selected layers (<span id="count">0</span>)</h2>
+    <ul id="layers"></ul>
+    <section id="empty">Select 2 or more layers to align.</section>
+    <section id="prompt" hidden>
+      Choose a key object: the layer the others align to.
+    </section>
+    <label id="close-after">
+      <input type="checkbox" id="close-after-input" checked />
+      Close after aligning
+    </label>
+    <section id="directions">
+      <button type="button" data-direction="left">Left</button>
+      <button type="button" data-direction="centerH">Center H</button>
+      <button type="button" data-direction="right">Right</button>
+      <button type="button" data-direction="top">Top</button>
+      <button type="button" data-direction="centerV">Center V</button>
+      <button type="button" data-direction="bottom">Bottom</button>
+    </section>
+    <section id="status" hidden></section>
+    <section id="warning" hidden></section>
+    <button id="close" type="button">Close</button>
 
-document.getElementById('create').onclick = () => {
-  const textbox = document.getElementById('count');
-  const count = parseInt(textbox.value, 10);
-  parent.postMessage({ pluginMessage: { type: 'create-shapes', count } }, '*')
-}
+    <script>
+      // NOTE: The `data-direction` values above must stay in sync with the
+      // `AlignDirection` type in code.ts. Change both if you rename a value.
+      // The main thread validates the received value, so a mismatch surfaces
+      // an "align-error" instead of a silent no-op.
+      //
+      // The key object is NEVER auto-selected: spec §10 requires the user to
+      // click a layer, so the buttons stay disabled and #prompt explains why
+      // until a radio is chosen.
+      const state = {
+        keyObjectId: null,
+        layers: [],
+        autoLayoutIds: [],
+        nonMovableIds: [],
+      };
 
-document.getElementById('cancel').onclick = () => {
-  parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*')
-}
+      const countEl = document.getElementById("count");
+      const layersEl = document.getElementById("layers");
+      const emptyEl = document.getElementById("empty");
+      const promptEl = document.getElementById("prompt");
+      const statusEl = document.getElementById("status");
+      const warningEl = document.getElementById("warning");
+      const closeEl = document.getElementById("close");
+      const closeAfterEl = document.getElementById("close-after-input");
+      const directionButtons = document.querySelectorAll(
+        "#directions button"
+      );
 
-</script>
+      const setStatus = (text) => {
+        statusEl.textContent = text || "";
+        statusEl.hidden = !text;
+      };
+
+      const setWarning = (text) => {
+        warningEl.textContent = text || "";
+        warningEl.hidden = !text;
+      };
+
+      const render = () => {
+        const previousScrollTop = layersEl.scrollTop;
+        const listHadFocus = layersEl.contains(document.activeElement);
+
+        countEl.textContent = String(state.layers.length);
+
+        layersEl.replaceChildren();
+        for (const layer of state.layers) {
+          const li = document.createElement("li");
+          const label = document.createElement("label");
+
+          const radio = document.createElement("input");
+          radio.type = "radio";
+          radio.name = "keyObject";
+          radio.value = layer.id;
+          radio.checked = layer.id === state.keyObjectId;
+          radio.addEventListener("change", () => {
+            if (state.keyObjectId === layer.id) return;
+            state.keyObjectId = layer.id;
+            setStatus("");
+            setWarning("");
+            render();
+          });
+
+          const name = document.createElement("span");
+          name.className = "name";
+          name.textContent = layer.name;
+
+          label.appendChild(radio);
+          label.appendChild(name);
+
+          if (layer.id === state.keyObjectId) {
+            const badge = document.createElement("span");
+            badge.className = "badge";
+            badge.textContent = "Key object";
+            label.appendChild(badge);
+          }
+          if (state.autoLayoutIds.includes(layer.id)) {
+            const badge = document.createElement("span");
+            badge.className = "badge warn";
+            badge.textContent = "Auto Layout";
+            label.appendChild(badge);
+          }
+          // Non-key layers that expose no x/y cannot be aligned
+          // directly. Flag them so the user knows why "nothing moves".
+          if (
+            state.nonMovableIds.includes(layer.id) &&
+            layer.id !== state.keyObjectId
+          ) {
+            const badge = document.createElement("span");
+            badge.className = "badge warn";
+            badge.textContent = "Not movable";
+            label.appendChild(badge);
+          }
+
+          li.appendChild(label);
+          layersEl.appendChild(li);
+        }
+
+        const canAlign =
+          state.layers.length >= 2 && state.keyObjectId !== null;
+        for (const button of directionButtons) {
+          button.disabled = !canAlign;
+        }
+
+        emptyEl.hidden = state.layers.length >= 2;
+        // Covers the "buttons disabled but nothing else is shown" case: 2+
+        // layers selected while no key object is designated (spec §9.2 asks us
+        // to prompt the user to designate one).
+        promptEl.hidden = !(
+          state.layers.length >= 2 && state.keyObjectId === null
+        );
+
+        // Re-rendering replaces every <li>, which resets scroll position and
+        // drops focus. Restore both so picking a key object in a long list does
+        // not jump the view.
+        layersEl.scrollTop = previousScrollTop;
+        if (listHadFocus) {
+          const checked = layersEl.querySelector(
+            'input[name="keyObject"]:checked'
+          );
+          if (checked) checked.focus();
+        }
+      };
+
+      for (const button of directionButtons) {
+        button.addEventListener("click", () => {
+          if (!state.keyObjectId) return;
+          parent.postMessage(
+            {
+              pluginMessage: {
+                type: "align",
+                keyObjectId: state.keyObjectId,
+                direction: button.dataset.direction,
+                closeAfter: closeAfterEl.checked,
+              },
+            },
+            "*"
+          );
+        });
+      }
+
+      closeEl.addEventListener("click", () => {
+        parent.postMessage({ pluginMessage: { type: "close" } }, "*");
+      });
+
+      window.onmessage = (event) => {
+        const message = event.data && event.data.pluginMessage;
+        if (!message) return;
+
+        if (message.type === "selection-updated") {
+          const layers = message.layers || [];
+          const lostKeyObject =
+            state.keyObjectId !== null &&
+            !layers.some((layer) => layer.id === state.keyObjectId);
+
+          state.layers = layers;
+          state.autoLayoutIds = message.autoLayoutIds || [];
+          state.nonMovableIds = message.nonMovableIds || [];
+
+          if (lostKeyObject) {
+            state.keyObjectId = null;
+          }
+
+          setStatus("");
+          if (lostKeyObject) {
+            // The Plugin API cannot lock canvas operations (deletion etc.), so
+            // this is the only place we can detect it. Warn and let the user
+            // pick again — never silently select another layer.
+            setWarning(
+              "The key object is no longer in the selection. Please choose a new one."
+            );
+          } else {
+            setWarning("");
+          }
+
+          render();
+          return;
+        }
+
+        if (message.type === "align-result") {
+          const moved = typeof message.moved === "number" ? message.moved : 0;
+          const skipped = Array.isArray(message.skipped) ? message.skipped : [];
+          if (moved > 0) {
+            setStatus(`Aligned ${moved} layer(s).`);
+          } else if (skipped.length === 0) {
+            setStatus("Already aligned.");
+          } else {
+            setStatus("");
+          }
+
+          const parts = [];
+          if (skipped.length > 0) {
+            const reasons = skipped.map((item) => item.reason).join(" / ");
+            parts.push(`Skipped ${skipped.length} layer(s): ${reasons}`);
+          }
+          if (typeof message.warning === "string" && message.warning) {
+            parts.push(message.warning);
+          }
+          setWarning(parts.join(" / "));
+          return;
+        }
+
+        if (message.type === "align-error") {
+          setStatus("");
+          setWarning(message.message || "Alignment failed.");
+          return;
+        }
+      };
+
+      // Initial render so the direction buttons start disabled and the
+      // "select layers" hint is visible before the first snapshot arrives.
+      render();
+
+      parent.postMessage({ pluginMessage: { type: "ui-ready" } }, "*");
+    </script>
+  </body>
+</html>

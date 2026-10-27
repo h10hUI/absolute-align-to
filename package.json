@@ -1,7 +1,7 @@
 {
   "name": "Absolute-Align-To",
   "version": "1.0.0",
-  "description": "Your Figma Plugin",
+  "description": "Align selected layers to a designated key object across frames.",
   "main": "code.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
