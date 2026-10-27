@@ -8,6 +8,13 @@ This file provides guidance to Claude Code when working with this repository.
 
 The full design document lives at `spec/align-to-v2-design.md`. Consult it before making design-level decisions.
 
+## Rules — always in effect
+
+These are imported, so they are always loaded. Keep them short and imperative.
+
+@.claude/rules/critical.md
+@.claude/rules/ts-rules.md
+
 ## Scope
 
 - Supported align directions: `left`, `right`, `top`, `bottom`, `centerH`, `centerV` (the basic 6).
