@@ -18,7 +18,8 @@ These are imported, so they are always loaded. Keep them short and imperative.
 ## Scope
 
 - Supported align directions: `left`, `right`, `top`, `bottom`, `centerH`, `centerV` (the basic 6).
-- Not supported: distribute (even spacing), rotated layers / rotated frames.
+- Planned, **not implemented yet** (the docs land before the code): distribute — `Space H` / `Space V` buttons that space layers evenly relative to the key object, with an optional `px` gap (empty input = automatic spacing). Needs **three or more** selected layers, one shared parent node for every selected layer (key object included), and no selected layer being an Auto Layout child.
+- Not supported: rotated layers / rotated frames (distribute included).
 - UI language: English.
 - Editor: `figma` only (`editorType: ["figma"]`).
 
@@ -57,15 +58,29 @@ All calculations happen in page-absolute space, so alignment works correctly reg
 - The key object stays fixed; it is **always** excluded from the set of layers being moved.
 - If the key object is deleted or deselected, detect it, show a warning in the UI, and prompt the user to re-select. (The Plugin API cannot lock canvas operations such as deletion.)
 
+### Distribute spacing (`Space H` / `Space V`) — planned
+
+- Same coordinate rules as align: compute in page-absolute space, convert back with the parent's absolute origin, then write `node.x` / `node.y`. No shortcuts, even though every selected layer shares one parent.
+- The key object stays fixed and is always excluded from the layers being moved.
+- Validity is judged in two stages. **Before the click (UI can evaluate):** every selected layer (key object included) must share the **same parent node**, no selected layer may be an Auto Layout child, and at least three layers must be selected — disable the buttons and input in these cases. **At run time (only known after the skip rules):** fewer than two effective moving layers disables distribute — the main thread must reject it **before computing or writing anything** and return the reason.
+- "Same parent node", not "same frame": layers nested in different groups inside one frame have different parents and are rejected; layers directly under the page share `PageNode` and are allowed. Selecting across multiple frames is a subset of "different parents".
+- Disabled entirely (not "skip and continue") when invalid. Dropping layers would produce spacing that does not match what the user selected — that is the reason, not that the math breaks.
+- No exception for a key object that is an Auto Layout child: under the same-parent rule, if any moving layer is an Auto Layout child then every selected layer — key object included — is a child of that same Auto Layout parent, so an exception would never be reachable.
+- Implement as a Figma-API-independent pure helper next to the align helpers, reusing `absoluteToRelative`. `Space H` / `Space V` are UI labels, not type names.
+- Parent reflow (GROUP and friends derive bounds from children) is not covered by the key-box change detection; do not claim it is. See `spec/align-to-v2-design.md` §4 and §9.4.
+- Placement, tie-break, the key object's anchor role, the empty-input meaning and validation ownership are settled in `spec/align-to-v2-design.md` §9.4.
+
 ### Edge cases
 
 - Single layer selected: disable the align buttons.
-- Auto Layout children: `x`/`y` writes are ignored or overridden by Auto Layout. **Skip** such layers and show a warning in the UI.
+- Auto Layout children: `x`/`y` writes are ignored or overridden by Auto Layout. **Skip** such layers and show a warning in the UI — for align.
+- Distribute validity (fewer than three layers, different parents, Auto Layout children): disable `Space H` / `Space V` and show the reason in the UI. Align stays available.
 - Rotation: not supported (no guard for now). Treat `rotation !== 0` detection as a future extension point.
 
 ## Code Conventions
 
 - Keep the alignment math (`computeTargetPosition`, `absoluteToRelative`) as Figma-API-independent helper functions at the top of `code.ts`.
+- Add the distribute math as another pure function alongside them, reusing `absoluteToRelative`. Align the identifiers (direction values, type and function names) with `spec/align-to-v2-design.md` §8 once they are settled there; until then, do not introduce concrete names of your own.
 - UI strings are English.
 - Prefer explicit types (e.g. `AlignDirection`, `Rect`).
 - The plugin needs no network access — keep `networkAccess.allowedDomains` as `["none"]` in `manifest.json`.
