@@ -229,7 +229,7 @@
             badge.textContent = "Auto Layout";
             label.appendChild(badge);
           }
-          // Non-key layers that expose no x/y (groups etc.) cannot be aligned
+          // Non-key layers that expose no x/y cannot be aligned
           // directly. Flag them so the user knows why "nothing moves".
           if (
             state.nonMovableIds.includes(layer.id) &&

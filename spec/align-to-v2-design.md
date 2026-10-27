@@ -138,7 +138,7 @@ const absoluteToRelative = (
 | ケース | 方針 |
 |---|---|
 | 選択レイヤーが1つのみ | Alignボタンを非活性にする（実行不可） |
-| Auto Layout配下のレイヤー | Auto Layoutが有効な親を持つ子は `x, y` の直接書き換えが無視される／自動的に戻される可能性があるため**非対応とする**。移動対象にAuto Layout配下のレイヤーが含まれる場合は、UI上で警告を表示し、そのレイヤーは整列処理をスキップする |
+| Auto Layout配下のレイヤー | Auto Layoutが有効な親（`layoutMode` が `NONE` 以外。`HORIZONTAL` / `VERTICAL` / `GRID` を含む）を持つ子は `x, y` の直接書き換えが無視される／自動的に戻される可能性があるため**非対応とする**。移動対象にAuto Layout配下のレイヤーが含まれる場合は、UI上で警告を表示し、そのレイヤーは整列処理をスキップする |
 | key object が削除・選択解除された場合 | Plugin APIにはキャンバス操作（削除等）をロックする手段がないため、削除・選択解除を検知した際にUI上で警告を表示し、key objectの再指定を促す |
 | locked ノード | 事前スキップはしない。`x / y` 書き込みの可否は Figma 側の挙動に従い、例外が発生した場合はそのメッセージをスキップ理由として UI に表示する |
 | Auto Layout の `layoutPositioning === "ABSOLUTE"` 子 | 技術的には `x, y` を直接書き換えられるが、本バージョンでは保守的に「Auto Layout 子はすべてスキップ」とする（将来拡張点） |
@@ -149,7 +149,6 @@ const absoluteToRelative = (
 
 - **key object の祖先は移動しない**：祖先を動かすと key object が道連れになり「key object を固定する」ルールが壊れるため、選択に含まれていてもスキップする。
 - **key object が GROUP / BOOLEAN_OPERATION のときは子孫もスキップ**：これらの型は bounds が子から導出されるため、子孫を動かすと key object 自身の box が変化して基準がずれる。FRAME の子は枠の端に揃える用途を維持するため移動可とする（FRAME は明示サイズを持ち、子移動では resize しない）。
-- **GROUP 自体は `x / y` を持たないため移動不可**：スキップして UI で「子を揃える」よう案内する。
 - **書き込み順序**：読み取り（Pass1）と書き込み（Pass2）を分離し、Pass2 では書き込み直前に key object の box と親の絶対原点を読み直す。祖先を先に書き、子はその後に書く（`getNodeDepth` 昇順）。
 - **key box の変化検知**：整列中に key object の box が変化した場合（例：共有グループの再配流）は、結果に warning を付けて検証を促す。
 - **`moved` の数え方**：書き込み後に `node.x / node.y` が実質変化したレイヤーのみを `moved` として数える（微小変化は許容誤差以下なら数えない）。変化が無くスキップも無い場合は UI に「Already aligned.」を表示する。

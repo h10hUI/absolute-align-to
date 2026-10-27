@@ -159,7 +159,7 @@ const getParentAbsoluteOrigin = (parent: BaseNode | null): Point | null => {
   return { x: box.x, y: box.y };
 };
 
-// Auto Layout parents manage their children; direct x/y writes are ignored or
+// Auto Layout parents (layoutMode HORIZONTAL / VERTICAL / GRID) manage their children; direct x/y writes are ignored or
 // overridden. Skip such children and surface a warning (spec §9.2). Members
 // with layoutPositioning === "ABSOLUTE" could technically move, but this
 // version conservatively skips every Auto Layout child.
@@ -378,11 +378,11 @@ const handleAlign = (rawKeyObjectId: unknown, rawDirection: unknown): void => {
     }
 
     if (!isMovableNode(node)) {
-      // e.g. GROUP nodes expose no x/y in the plugin API and cannot be aligned
-      // directly. Selecting and aligning their children works instead.
+      // Defensive guard for nodes without x/y. GROUP does expose x/y in the
+      // plugin API, so groups are moved like any other node.
       skipped.push({
         id: node.id,
-        reason: `${node.name}: cannot be moved directly (e.g. group) — align its children instead`,
+        reason: `${node.name}: cannot be moved directly — skipped`,
       });
       continue;
     }
