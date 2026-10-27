@@ -154,7 +154,6 @@ const absoluteToRelative = (
 - **key object が GROUP / BOOLEAN_OPERATION のときは子孫もスキップ**：これらの型は bounds が子から導出されるため、子孫を動かすと key object 自身の box が変化して基準がずれる。FRAME の子は枠の端に揃える用途を維持するため移動可とする（FRAME は明示サイズを持ち、子移動では resize しない）。
 - **書き込み順序**：読み取り（Pass1）と書き込み（Pass2）を分離し、Pass2 では書き込み直前に key object の box と親の絶対原点を読み直す。祖先を先に書き、子はその後に書く（`getNodeDepth` 昇順）。
 - **key box の変化検知**：整列中に key object の box が変化した場合（例：共有グループの再配流）は、結果に warning を付けて検証を促す。
-- **整列対象の GROUP / BOOLEAN_OPERATION 内の子孫はスキップ**：コンテナと子孫が両方とも整列対象のとき、子孫の移動でコンテナの bounds が変わりコンテナの整列が崩れるため、子孫をスキップして理由を UI に表示する。
 - **`moved` の数え方**：書き込み後の `absoluteBoundingBox` が元のページ空間位置から実質変化したレイヤーのみを `moved` として数える（微小変化は許容誤差以下なら数えない）。親相対の `x / y` は、グループ内の子を動かすとグループ原点も動き変化しないことがあるため判定に使わない。変化が無くスキップも無い場合は「Already aligned.」を通知する（下記「整列後の終了」参照）。
 
 **整列後の終了**：UI の「Close after aligning」チェックボックス（初期値 ON、方向ボタンの上）が ON で、かつスキップも警告も無く正常終了した場合は `figma.closePlugin(message)` でプラグインを閉じ、結果をトーストで通知する（`Aligned N layer(s).`、変化が無ければ `Already aligned.`）。OFF の場合、およびスキップまたは key box 変化の警告がある場合は閉じず、UI に結果・理由を表示する（連続操作向け）。チェック状態は永続化しないため、プラグインを開き直すと ON に戻る。`closeAfter` は `align` メッセージで送り、`code.ts` 側は `true` のときだけ有効とみなす。

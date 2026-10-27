@@ -367,7 +367,7 @@ const handleAlign = (
 
   // Pass 1 (read only).
   type PlannedMove = { node: SceneNode; originalRect: Rect; depth: number };
-  const candidates: PlannedMove[] = [];
+  const planned: PlannedMove[] = [];
   const skipped: { id: string; reason: string }[] = [];
   const keyIsChildDerived = isChildDerivedBoxNode(keyNode);
 
@@ -419,32 +419,7 @@ const handleAlign = (
       skipped.push({ id: node.id, reason: `${node.name}: no bounding box` });
       continue;
     }
-    candidates.push({
-      node,
-      originalRect: movingRect,
-      depth: getNodeDepth(node),
-    });
-  }
-
-  // A GROUP / boolean op's box is derived from its children. If such a node and
-  // one of its descendants are both being aligned, the descendant's later move
-  // reflows the container and undoes its alignment. Skip the descendant.
-  const planned: PlannedMove[] = [];
-  for (const entry of candidates) {
-    const container = candidates.find(
-      (other) =>
-        other !== entry &&
-        isChildDerivedBoxNode(other.node) &&
-        isAncestorOf(other.node, entry.node),
-    );
-    if (container) {
-      skipped.push({
-        id: entry.node.id,
-        reason: `${entry.node.name}: inside ${container.node.name}, which is also being aligned — skipped`,
-      });
-      continue;
-    }
-    planned.push(entry);
+    planned.push({ node, originalRect: movingRect, depth: getNodeDepth(node) });
   }
 
   // Ancestors before descendants (Array.prototype.sort is stable in ES2019+).
