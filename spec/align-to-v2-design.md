@@ -59,13 +59,19 @@ key object ID + direction を受信 ←──── postMessageで送信
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
   "editorType": ["figma"],
   "capabilities": [],
-  "permissions": []
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
 }
 ```
 
-ネットワークアクセスは不要のため `networkAccess` は設定しない。
+ネットワークアクセスは不要だが、`manifest.json` の仕様に合わせて `networkAccess.allowedDomains` を `["none"]` に固定する（CLAUDE.md 準拠）。
+
+`documentAccess: "dynamic-page"` を指定しているため、同期 API の `figma.getNodeById` は使用できない。key object は `figma.currentPage.selection` を走査して解決する。また、UI からの準備完了通知（`ui-ready` ハンドシェイク）を受けてから最初の selection スナップショットを送ることで、`showUI()` 直後の早期送信の取りこぼしを防ぐ。
 
 ## 7. ファイル構成
 
@@ -101,15 +107,21 @@ const computeTargetPosition = (
 ): { x: number; y: number } => { /* ... */ };
 
 /**
- * ページ空間の絶対座標を、親の absoluteBoundingBox を使って親相対座標（node.x, node.y相当）に変換する
+ * ページ空間の絶対座標を、親の絶対原点（ページ空間）を使って親相対座標に変換する
+ *
+ * 回転・スケール非対応（§4）のため、親の軸はページ空間と一致し、原点差分の単純減算で求まる。
+ * 変換には親の「原点」のみを使う（width/height は不要）。呼び出し側は必ず
+ * 「書き込み直前に読み直した」親原点を渡すこと（handleAlign 参照）。
  */
+type Point = { x: number; y: number };
+
 const absoluteToRelative = (
-  absolutePos: { x: number; y: number },
-  parentAbsoluteBox: Rect
-): { x: number; y: number } => { /* ... */ };
+  absolutePos: Point,
+  parentAbsoluteOrigin: Point
+): Point => { /* ... */ };
 ```
 
-これらはエクスポートせず `code.ts` 内でのみ使用する。
+これらはエクスポートせず `code.ts` 内でのみ使用する。`absoluteToRelative` は実装では `Point`（親の原点）を受け取る。仕様上は `Rect` としていたが原点以外は未使用のため `Point` に改めた。
 
 ## 9. 仕様上の考慮点
 
@@ -128,6 +140,19 @@ const absoluteToRelative = (
 | 選択レイヤーが1つのみ | Alignボタンを非活性にする（実行不可） |
 | Auto Layout配下のレイヤー | Auto Layoutが有効な親を持つ子は `x, y` の直接書き換えが無視される／自動的に戻される可能性があるため**非対応とする**。移動対象にAuto Layout配下のレイヤーが含まれる場合は、UI上で警告を表示し、そのレイヤーは整列処理をスキップする |
 | key object が削除・選択解除された場合 | Plugin APIにはキャンバス操作（削除等）をロックする手段がないため、削除・選択解除を検知した際にUI上で警告を表示し、key objectの再指定を促す |
+| locked ノード | 事前スキップはしない。`x / y` 書き込みの可否は Figma 側の挙動に従い、例外が発生した場合はそのメッセージをスキップ理由として UI に表示する |
+| Auto Layout の `layoutPositioning === "ABSOLUTE"` 子 | 技術的には `x, y` を直接書き換えられるが、本バージョンでは保守的に「Auto Layout 子はすべてスキップ」とする（将来拡張点） |
+| 親に `absoluteBoundingBox` が無い場合 | 親の絶対原点を取得できないため、そのレイヤーはスキップする |
+| `x / y` 書き込み時の例外（INSTANCE の子など） | 例外メッセージをスキップ理由に変換し、バッチ全体は中断せず残りのレイヤーを処理する |
+
+### 9.3 実装が追加で担保する挙動
+
+- **key object の祖先は移動しない**：祖先を動かすと key object が道連れになり「key object を固定する」ルールが壊れるため、選択に含まれていてもスキップする。
+- **key object が GROUP / BOOLEAN_OPERATION のときは子孫もスキップ**：これらの型は bounds が子から導出されるため、子孫を動かすと key object 自身の box が変化して基準がずれる。FRAME の子は枠の端に揃える用途を維持するため移動可とする（FRAME は明示サイズを持ち、子移動では resize しない）。
+- **GROUP 自体は `x / y` を持たないため移動不可**：スキップして UI で「子を揃える」よう案内する。
+- **書き込み順序**：読み取り（Pass1）と書き込み（Pass2）を分離し、Pass2 では書き込み直前に key object の box と親の絶対原点を読み直す。祖先を先に書き、子はその後に書く（`getNodeDepth` 昇順）。
+- **key box の変化検知**：整列中に key object の box が変化した場合（例：共有グループの再配流）は、結果に warning を付けて検証を促す。
+- **`moved` の数え方**：書き込み後に `node.x / node.y` が実質変化したレイヤーのみを `moved` として数える（微小変化は許容誤差以下なら数えない）。変化が無くスキップも無い場合は UI に「Already aligned.」を表示する。
 
 ## 10. UI設計（構成イメージ）
 
@@ -146,3 +171,5 @@ const absoluteToRelative = (
 - Key object の指定はラジオボタン的に1つのみ選択可能。
 - 選択変更はFigma側の `selectionchange` イベントを受けて、UI側のレイヤー一覧を都度更新する。
 - ボタンラベルは英語表記（Left / Right / Top / Bottom / Center H / Center V）。
+- 警告領域（`#warning`）は最後に設定した内容を表示する。selection 更新時は「key object を見失った」警告を優先し、それ以外ではクリアする。整列実行後はスキップ理由／key box 変化の警告を表示する。
+- レイヤー一覧の再描画時はスクロール位置を保持し、直前までリスト内にフォーカスがあった場合は選択中のラジオへフォーカスを戻す。
