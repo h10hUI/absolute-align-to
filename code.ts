@@ -15,12 +15,9 @@
 
 type AlignDirection = "left" | "right" | "top" | "bottom" | "centerH" | "centerV";
 
-type Rect = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+// `Rect` ({ x, y, width, height }) is declared globally by @figma/plugin-typings
+// with the same shape the spec (§8) defines, so it is reused instead of
+// redeclared (a second declaration is a duplicate-identifier error).
 
 type Point = {
   x: number;
@@ -105,9 +102,10 @@ const absoluteToRelative = (
 // Figma-side helpers
 // ---------------------------------------------------------------------------
 
-type MovableNode = SceneNode & { x: number; y: number };
-
-const isMovableNode = (node: SceneNode): node is MovableNode =>
+// Every SceneNode in the installed typings declares x/y, so this is a plain
+// runtime check rather than a type guard (a guard would narrow the negative
+// branch to `never`).
+const isMovableNode = (node: SceneNode): boolean =>
   "x" in node && "y" in node;
 
 const getAbsoluteRect = (node: SceneNode): Rect | null => {
@@ -345,7 +343,7 @@ const handleAlign = (rawKeyObjectId: unknown, rawDirection: unknown): void => {
   }
 
   // Pass 1 (read only).
-  type PlannedMove = { node: MovableNode; originalRect: Rect; depth: number };
+  type PlannedMove = { node: SceneNode; originalRect: Rect; depth: number };
   const planned: PlannedMove[] = [];
   const skipped: { id: string; reason: string }[] = [];
   const keyIsChildDerived = isChildDerivedBoxNode(keyNode);
