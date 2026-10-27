@@ -1,40 +1,61 @@
-Below are the steps to get your plugin running. You can also find instructions at:
+# Absolute Align To
 
-  https://www.figma.com/plugin-docs/plugin-quickstart-guide/
+A Figma plugin that aligns selected layers relative to a designated **key object**. It is a zero-based re-implementation of the classic [Align To](https://www.figma.com/community/plugin/742450159822269057/align-to) plugin, fixing the coordinate-system issues that occur when selected layers belong to different parent frames.
 
-This plugin template uses Typescript and NPM, two standard tools in creating JavaScript applications.
+## Features
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+- Align selected layers **relative to a key object** in six directions:
+  - Left / Right / Top / Bottom
+  - Center H (horizontal center) / Center V (vertical center)
+- Pick exactly one layer as the key object (radio-style selection).
+- The key object stays fixed and is **always** excluded from the layers being moved.
+- Works correctly when selected layers belong to **different parent frames**, because all alignment is computed in page-absolute space and converted back to parent-relative coordinates before writing `node.x` / `node.y`.
 
-  https://nodejs.org/en/download/
+## Not supported
 
-Next, install TypeScript using the command:
+- Distribute (even spacing) — reserved for a future extension.
+- Rotated layers / rotated frames.
+- Auto Layout children — `x`/`y` writes are ignored by Auto Layout, so such layers are skipped with a UI warning.
 
-  npm install -g typescript
+## Usage
 
-Finally, in the directory of your plugin, get the latest type definitions for the plugin API by running:
+1. Select two or more layers on the canvas.
+2. Open the plugin and choose one layer as the **key object**.
+3. Click an align direction button. All other layers move so they align to the key object.
 
-  npm install --save-dev @figma/plugin-typings
+## Development
 
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
+### Requirements
 
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
+- Node.js / npm
+- TypeScript
 
-For more information, visit https://www.typescriptlang.org/
+### Setup
 
-Using TypeScript requires a compiler to convert TypeScript (code.ts) into JavaScript (code.js)
-for the browser to run.
+```sh
+npm install
+```
 
-We recommend writing TypeScript code using Visual Studio code:
+### Build
 
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-    then select "npm: watch". You will have to do this again every time
-    you reopen Visual Studio Code.
+The plugin is written in TypeScript and must be compiled to JavaScript before running in Figma. Run the watch task and it will regenerate the JavaScript on every save:
 
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+```sh
+npm run watch
+```
+
+### Project structure
+
+```
+src/
+  code.ts       main thread: selection monitoring, postMessage to/from UI, invokes alignment
+  align.ts      pure functions for alignment math (Figma-API independent, unit testable)
+  ui/
+    ui.html
+    ui.ts       layer list rendering, key-object selection, direction button handlers
+manifest.json
+tsconfig.json
+package.json
+```
+
+For the architecture and design details, see [`spec/align-to-v2-design.md`](spec/align-to-v2-design.md). For guidance on working in this repository with Claude Code, see [`CLAUDE.md`](CLAUDE.md).
