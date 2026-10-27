@@ -367,7 +367,7 @@ const handleAlign = (
 
   // Pass 1 (read only).
   type PlannedMove = { node: SceneNode; originalRect: Rect; depth: number };
-  const planned: PlannedMove[] = [];
+  const candidates: PlannedMove[] = [];
   const skipped: { id: string; reason: string }[] = [];
   const keyIsChildDerived = isChildDerivedBoxNode(keyNode);
 
@@ -419,7 +419,32 @@ const handleAlign = (
       skipped.push({ id: node.id, reason: `${node.name}: no bounding box` });
       continue;
     }
-    planned.push({ node, originalRect: movingRect, depth: getNodeDepth(node) });
+    candidates.push({
+      node,
+      originalRect: movingRect,
+      depth: getNodeDepth(node),
+    });
+  }
+
+  // A GROUP / boolean op's box is derived from its children. If such a node and
+  // one of its descendants are both being aligned, the descendant's later move
+  // reflows the container and undoes its alignment. Skip the descendant.
+  const planned: PlannedMove[] = [];
+  for (const entry of candidates) {
+    const container = candidates.find(
+      (other) =>
+        other !== entry &&
+        isChildDerivedBoxNode(other.node) &&
+        isAncestorOf(other.node, entry.node),
+    );
+    if (container) {
+      skipped.push({
+        id: entry.node.id,
+        reason: `${entry.node.name}: inside ${container.node.name}, which is also being aligned — skipped`,
+      });
+      continue;
+    }
+    planned.push(entry);
   }
 
   // Ancestors before descendants (Array.prototype.sort is stable in ES2019+).
@@ -468,14 +493,16 @@ const handleAlign = (
       const relative = absoluteToRelative(target, parentOrigin);
       // Always write (correctness: this also counteracts an ancestor move made
       // earlier in the batch), but count the layer as "moved" only when its
-      // position actually changes, so no-op alignments are not reported.
-      const previousX = node.x;
-      const previousY = node.y;
+      // page-space position actually changes. Parent-relative x/y is not a
+      // reliable signal: moving a group's leftmost child shifts the group's
+      // origin and can leave the child's local x unchanged.
       node.x = relative.x;
       node.y = relative.y;
+      const writtenRect = getAbsoluteRect(node);
       if (
-        Math.abs(node.x - previousX) > POSITION_EPSILON ||
-        Math.abs(node.y - previousY) > POSITION_EPSILON
+        !writtenRect ||
+        Math.abs(writtenRect.x - originalRect.x) > POSITION_EPSILON ||
+        Math.abs(writtenRect.y - originalRect.y) > POSITION_EPSILON
       ) {
         moved += 1;
       }
