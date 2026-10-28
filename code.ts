@@ -120,13 +120,31 @@ const axisSize = (rect: Rect, axis: DistributeAxis): number =>
   axis === "horizontal" ? rect.width : rect.height;
 
 /**
+ * Mean of the existing gaps (next.start - previous.end) of the ordered items.
+ * Negative when the original layout overlaps; the caller rejects that case
+ * because placing items with a negative gap can reverse their order.
+ */
+const computeAutomaticGap = (
+  axis: DistributeAxis,
+  orderedItems: readonly DistributeItem[],
+): number => {
+  let totalGap = 0;
+  for (let i = 1; i < orderedItems.length; i += 1) {
+    totalGap +=
+      axisStart(orderedItems[i].rect, axis) -
+      axisEnd(orderedItems[i - 1].rect, axis);
+  }
+  return totalGap / (orderedItems.length - 1);
+};
+
+/**
  * Compute the new page-space top-left position for every moving item (spec
  * §9.4). `orderedItems` MUST already be ordered by axis start (tie-broken by
  * document order) and MUST include the key object. The key object is the fixed
  * anchor and is never present in the returned map.
  *
- * `spacing === null` means automatic: the mean of the existing gaps
- * (next.start - previous.end), which may be negative (§9.4.3). An explicit
+ * `spacing === null` means automatic: the mean of the existing gaps (§9.4.3).
+ * The main thread rejects a negative mean before calling this. An explicit
  * spacing is used verbatim — no rounding, zero allowed (§9.4.4).
  *
  * Defensive only: fewer than three items or a missing key object yields an
@@ -147,18 +165,7 @@ const computeDistributedPositions = (
   const keyStart = axisStart(keyRect, axis);
   const keyEnd = axisEnd(keyRect, axis);
 
-  let gap: number;
-  if (spacing === null) {
-    let totalGap = 0;
-    for (let i = 1; i < orderedItems.length; i += 1) {
-      totalGap +=
-        axisStart(orderedItems[i].rect, axis) -
-        axisEnd(orderedItems[i - 1].rect, axis);
-    }
-    gap = totalGap / (orderedItems.length - 1);
-  } else {
-    gap = spacing;
-  }
+  const gap = spacing === null ? computeAutomaticGap(axis, orderedItems) : spacing;
 
   // Place each side outward from the fixed key object, so the key object's
   // position never changes (§9.4.2). Widths are per item, not assumed equal.
@@ -857,6 +864,17 @@ const handleDistribute = (
     if (delta !== 0) return delta;
     return getOrder(a.id) - getOrder(b.id);
   });
+
+  // Overlapping layers give a negative mean gap, which can reverse the order.
+  // Reject before any write.
+  if (spacing === null && computeAutomaticGap(axis, orderedItems) < 0) {
+    postDistributeResult(
+      0,
+      skipped,
+      "Layers overlap, so automatic spacing is not possible. Enter a spacing value.",
+    );
+    return;
+  }
 
   const targets = computeDistributedPositions(
     axis,

@@ -21,7 +21,7 @@ A Figma plugin that aligns selected layers relative to a designated **key object
 
 - Rotated layers / rotated frames — both alignment and distribute.
 - Align on Auto Layout children — `x`/`y` writes are ignored by Auto Layout, so such layers are skipped with a UI warning.
-- Distribute is unavailable unless all conditions hold — at least **three** layers selected, every selected layer (key object included) sharing the **same parent node** (selecting across multiple frames, or across groups inside one frame, is rejected), and no selected layer being an Auto Layout child. `Space H` / `Space V` and the `px` field are disabled with the reason shown in the UI in those cases; a condition that can only be checked on click (fewer than two movable layers after skipping) is rejected with a reason instead. Align keeps working either way.
+- Distribute is unavailable unless all conditions hold — at least **three** layers selected, every selected layer (key object included) sharing the **same parent node** (selecting across multiple frames, or across groups inside one frame, is rejected), and no selected layer being an Auto Layout child. `Space H` / `Space V` and the `px` field are disabled with the reason shown in the UI in those cases; a condition that can only be checked on click (fewer than two movable layers after skipping, or automatic spacing on overlapping layers whose mean gap is negative) is rejected with a reason instead. Align keeps working either way.
 
 ## Usage
 
