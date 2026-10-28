@@ -94,6 +94,58 @@
         opacity: 0.4;
         cursor: default;
       }
+      #space {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      #space button {
+        padding: 6px 4px;
+        font-size: 10px;
+        border: 1px solid var(--figma-color-border, #dcdcdc);
+        background: var(--figma-color-bg, #ffffff);
+        color: var(--figma-color-text, #1e1e1e);
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      #space button:hover:not(:disabled) {
+        background: var(--figma-color-bg-secondary, #f5f5f5);
+      }
+      #space button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      #spacing-input {
+        width: 56px;
+        margin-left: 4px;
+        padding: 5px 4px;
+        font-size: 10px;
+        font-family: inherit;
+        border: 1px solid var(--figma-color-border, #dcdcdc);
+        border-radius: 4px;
+        background: var(--figma-color-bg, #ffffff);
+        color: var(--figma-color-text, #1e1e1e);
+      }
+      #spacing-input:focus {
+        border-color: var(--figma-color-border-brand, #0d99ff);
+        outline: 1px solid var(--figma-color-border-brand, #0d99ff);
+        outline-offset: -1px;
+      }
+      #spacing-input:disabled {
+        opacity: 0.4;
+      }
+      #space .unit {
+        font-size: 10px;
+        color: var(--figma-color-text-secondary, #666);
+      }
+      #distribute-hint {
+        font-size: 10px;
+        color: var(--figma-color-text-secondary, #666);
+      }
+      #spacing-error {
+        font-size: 10px;
+        color: var(--figma-color-text-danger, #c00);
+      }
       #empty,
       #prompt {
         font-size: 10px;
@@ -156,6 +208,21 @@
       <button type="button" data-direction="centerV">Center V</button>
       <button type="button" data-direction="bottom">Bottom</button>
     </section>
+    <section id="space">
+      <button type="button" data-axis="horizontal">Space H</button>
+      <button type="button" data-axis="vertical">Space V</button>
+      <input
+        type="text"
+        id="spacing-input"
+        inputmode="decimal"
+        autocomplete="off"
+        aria-label="Spacing in px (empty = automatic)"
+        title="Spacing in px (empty = automatic)"
+      />
+      <span class="unit">px</span>
+    </section>
+    <section id="distribute-hint" hidden></section>
+    <section id="spacing-error" hidden></section>
     <section id="status" hidden></section>
     <section id="warning" hidden></section>
     <button id="close" type="button">Close</button>
@@ -174,6 +241,7 @@
         layers: [],
         autoLayoutIds: [],
         nonMovableIds: [],
+        sameParent: false,
       };
 
       const countEl = document.getElementById("count");
@@ -187,6 +255,10 @@
       const directionButtons = document.querySelectorAll(
         "#directions button"
       );
+      const distributeButtons = document.querySelectorAll("#space button");
+      const spacingEl = document.getElementById("spacing-input");
+      const distributeHintEl = document.getElementById("distribute-hint");
+      const spacingErrorEl = document.getElementById("spacing-error");
 
       const setStatus = (text) => {
         statusEl.textContent = text || "";
@@ -196,6 +268,11 @@
       const setWarning = (text) => {
         warningEl.textContent = text || "";
         warningEl.hidden = !text;
+      };
+
+      const setSpacingError = (text) => {
+        spacingErrorEl.textContent = text || "";
+        spacingErrorEl.hidden = !text;
       };
 
       const render = () => {
@@ -263,6 +340,44 @@
           button.disabled = !canAlign;
         }
 
+        // Distribute pre-checks (§9.2). These are the conditions the UI can
+        // evaluate without the skip rules. The run-time condition (fewer than
+        // two movable layers after skipping) is decided by the main thread and
+        // cannot disable the buttons here.
+        //
+        // Nothing is evaluated on an empty selection: #empty already explains
+        // the state, and shareSameParent([]) is false, so the parent reason
+        // would be pure noise.
+        const distributeBlockers = [];
+        if (state.layers.length > 0) {
+          if (state.layers.length < 3) {
+            distributeBlockers.push("Select 3 or more layers.");
+          }
+          if (state.keyObjectId === null) {
+            distributeBlockers.push("Choose a key object.");
+          }
+          if (!state.sameParent) {
+            distributeBlockers.push(
+              "All selected layers must share the same parent."
+            );
+          }
+          if (state.autoLayoutIds.length > 0) {
+            distributeBlockers.push("Auto Layout children are not supported.");
+          }
+        }
+        const canDistribute =
+          state.layers.length > 0 && distributeBlockers.length === 0;
+        for (const button of distributeButtons) {
+          button.disabled = !canDistribute;
+        }
+        spacingEl.disabled = !canDistribute;
+        distributeHintEl.textContent = distributeBlockers.join(" ");
+        // Hide when there is nothing to say; an empty section would still add
+        // the flex gap between rows.
+        distributeHintEl.hidden = distributeBlockers.length === 0;
+        // A format error is meaningless once distribute cannot run.
+        if (!canDistribute) setSpacingError("");
+
         emptyEl.hidden = state.layers.length >= 2;
         // Covers the "buttons disabled but nothing else is shown" case: 2+
         // layers selected while no key object is designated (spec §9.2 asks us
@@ -300,6 +415,81 @@
         });
       }
 
+      // Empty field = automatic spacing (`null`). Otherwise the value must be a
+      // non-negative number (decimals allowed); anything else is not sent.
+      const parseSpacing = () => {
+        const raw = spacingEl.value.trim();
+        if (raw === "") return { spacing: null };
+        if (!/^\d+(\.\d+)?$/.test(raw)) return null;
+        return { spacing: Number(raw) };
+      };
+
+      for (const button of distributeButtons) {
+        button.addEventListener("click", () => {
+          if (!state.keyObjectId) return;
+          const parsed = parseSpacing();
+          if (!parsed) {
+            setSpacingError("Enter a number of px, or leave the field empty.");
+            return;
+          }
+          setSpacingError("");
+          parent.postMessage(
+            {
+              pluginMessage: {
+                type: "distribute",
+                axis: button.dataset.axis,
+                keyObjectId: state.keyObjectId,
+                spacing: parsed.spacing,
+                closeAfter: closeAfterEl.checked,
+              },
+            },
+            "*"
+          );
+        });
+      }
+
+      spacingEl.addEventListener("input", () => {
+        setSpacingError("");
+      });
+
+      // Shared rendering for align-result / distribute-result: same shape,
+      // different wording. `warningIsRejection` marks the distribute case where
+      // the main thread reports a run-time refusal as
+      // { moved: 0, skipped: [], warning: reason }; that must not be shown as
+      // "already distributed".
+      const renderResult = (
+        message,
+        doneText,
+        alreadyText,
+        warningIsRejection
+      ) => {
+        const moved = typeof message.moved === "number" ? message.moved : 0;
+        const skipped = Array.isArray(message.skipped) ? message.skipped : [];
+        const warning =
+          typeof message.warning === "string" ? message.warning : "";
+        const rejected =
+          warningIsRejection &&
+          moved === 0 &&
+          skipped.length === 0 &&
+          warning !== "";
+
+        if (moved > 0) {
+          setStatus(doneText(moved));
+        } else if (skipped.length === 0 && !rejected) {
+          setStatus(alreadyText);
+        } else {
+          setStatus("");
+        }
+
+        const parts = [];
+        if (skipped.length > 0) {
+          const reasons = skipped.map((item) => item.reason).join(" / ");
+          parts.push(`Skipped ${skipped.length} layer(s): ${reasons}`);
+        }
+        if (warning) parts.push(warning);
+        setWarning(parts.join(" / "));
+      };
+
       closeEl.addEventListener("click", () => {
         parent.postMessage({ pluginMessage: { type: "close" } }, "*");
       });
@@ -317,12 +507,14 @@
           state.layers = layers;
           state.autoLayoutIds = message.autoLayoutIds || [];
           state.nonMovableIds = message.nonMovableIds || [];
+          state.sameParent = message.sameParent === true;
 
           if (lostKeyObject) {
             state.keyObjectId = null;
           }
 
           setStatus("");
+          setSpacingError("");
           if (lostKeyObject) {
             // The Plugin API cannot lock canvas operations (deletion etc.), so
             // this is the only place we can detect it. Warn and let the user
@@ -339,25 +531,22 @@
         }
 
         if (message.type === "align-result") {
-          const moved = typeof message.moved === "number" ? message.moved : 0;
-          const skipped = Array.isArray(message.skipped) ? message.skipped : [];
-          if (moved > 0) {
-            setStatus(`Aligned ${moved} layer(s).`);
-          } else if (skipped.length === 0) {
-            setStatus("Already aligned.");
-          } else {
-            setStatus("");
-          }
+          renderResult(
+            message,
+            (moved) => `Aligned ${moved} layer(s).`,
+            "Already aligned.",
+            false
+          );
+          return;
+        }
 
-          const parts = [];
-          if (skipped.length > 0) {
-            const reasons = skipped.map((item) => item.reason).join(" / ");
-            parts.push(`Skipped ${skipped.length} layer(s): ${reasons}`);
-          }
-          if (typeof message.warning === "string" && message.warning) {
-            parts.push(message.warning);
-          }
-          setWarning(parts.join(" / "));
+        if (message.type === "distribute-result") {
+          renderResult(
+            message,
+            (moved) => `Distributed ${moved} layer(s).`,
+            "Already distributed.",
+            true
+          );
           return;
         }
 

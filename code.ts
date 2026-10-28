@@ -98,6 +98,109 @@ const absoluteToRelative = (
   y: absolutePos.y - parentAbsoluteOrigin.y,
 });
 
+type DistributeAxis = "horizontal" | "vertical";
+
+const DISTRIBUTE_AXES: readonly DistributeAxis[] = ["horizontal", "vertical"];
+
+const isDistributeAxis = (value: unknown): value is DistributeAxis =>
+  typeof value === "string" &&
+  DISTRIBUTE_AXES.some((axis) => axis === value);
+
+// The axis ordering (tie-break) needs `parent.children`, so it stays on the
+// Figma side; the pure function receives the already-ordered items.
+type DistributeItem = { id: string; rect: Rect };
+
+const axisStart = (rect: Rect, axis: DistributeAxis): number =>
+  axis === "horizontal" ? rect.x : rect.y;
+
+const axisEnd = (rect: Rect, axis: DistributeAxis): number =>
+  axis === "horizontal" ? rect.x + rect.width : rect.y + rect.height;
+
+const axisSize = (rect: Rect, axis: DistributeAxis): number =>
+  axis === "horizontal" ? rect.width : rect.height;
+
+/**
+ * Mean of the existing gaps (next.start - previous.end) of the ordered items.
+ * Negative when the original layout overlaps; the caller rejects that case
+ * because placing items with a negative gap can reverse their order.
+ */
+const computeAutomaticGap = (
+  axis: DistributeAxis,
+  orderedItems: readonly DistributeItem[],
+): number => {
+  let totalGap = 0;
+  for (let i = 1; i < orderedItems.length; i += 1) {
+    totalGap +=
+      axisStart(orderedItems[i].rect, axis) -
+      axisEnd(orderedItems[i - 1].rect, axis);
+  }
+  return totalGap / (orderedItems.length - 1);
+};
+
+/**
+ * Compute the new page-space top-left position for every moving item (spec
+ * §9.4). `orderedItems` MUST already be ordered by axis start (tie-broken by
+ * document order) and MUST include the key object. The key object is the fixed
+ * anchor and is never present in the returned map.
+ *
+ * `spacing === null` means automatic: the mean of the existing gaps (§9.4.3).
+ * The main thread rejects a negative mean before calling this. An explicit
+ * spacing is used verbatim — no rounding, zero allowed (§9.4.4).
+ *
+ * Defensive only: fewer than three items or a missing key object yields an
+ * empty map instead of throwing; the main thread rejects those cases before
+ * calling this.
+ */
+const computeDistributedPositions = (
+  axis: DistributeAxis,
+  orderedItems: readonly DistributeItem[],
+  keyObjectId: string,
+  spacing: number | null,
+): Map<string, Point> => {
+  const positions = new Map<string, Point>();
+  const keyIndex = orderedItems.findIndex((item) => item.id === keyObjectId);
+  if (keyIndex < 0 || orderedItems.length < 3) return positions;
+
+  const keyRect = orderedItems[keyIndex].rect;
+  const keyStart = axisStart(keyRect, axis);
+  const keyEnd = axisEnd(keyRect, axis);
+
+  const gap = spacing === null ? computeAutomaticGap(axis, orderedItems) : spacing;
+
+  // Place each side outward from the fixed key object, so the key object's
+  // position never changes (§9.4.2). Widths are per item, not assumed equal.
+  const starts = new Map<string, number>();
+
+  let forward = keyEnd + gap;
+  for (let i = keyIndex + 1; i < orderedItems.length; i += 1) {
+    const item = orderedItems[i];
+    starts.set(item.id, forward);
+    forward += axisSize(item.rect, axis) + gap;
+  }
+
+  let backward = keyStart - gap;
+  for (let i = keyIndex - 1; i >= 0; i -= 1) {
+    const item = orderedItems[i];
+    backward -= axisSize(item.rect, axis);
+    starts.set(item.id, backward);
+    backward -= gap;
+  }
+
+  for (const item of orderedItems) {
+    if (item.id === keyObjectId) continue;
+    const start = starts.get(item.id);
+    if (start === undefined) continue;
+    positions.set(
+      item.id,
+      axis === "horizontal"
+        ? { x: start, y: item.rect.y }
+        : { x: item.rect.x, y: start },
+    );
+  }
+
+  return positions;
+};
+
 // ---------------------------------------------------------------------------
 // Figma-side helpers
 // ---------------------------------------------------------------------------
@@ -150,16 +253,63 @@ const POSITION_EPSILON = 0.001;
  * trip. After excluding PAGE / DOCUMENT, the remaining containers (frames,
  * groups, components, instances, sections, ...) expose absoluteBoundingBox.
  *
+ * GROUP and BOOLEAN_OPERATION are not coordinate spaces: Figma expresses the
+ * x/y of their children relative to the closest ancestor that is neither, so
+ * those ancestors are skipped before the origin is read.
+ *
  * handleAlign re-reads this right before each write so origin shifts caused by
  * earlier writes in the same batch are accounted for.
  */
-const getParentAbsoluteOrigin = (parent: BaseNode | null): Point | null => {
+const getParentAbsoluteOrigin = (start: BaseNode | null): Point | null => {
+  let parent = start;
+  while (
+    parent &&
+    (parent.type === "GROUP" || parent.type === "BOOLEAN_OPERATION")
+  ) {
+    parent = parent.parent;
+  }
   if (!parent) return null;
   if (parent.type === "PAGE" || parent.type === "DOCUMENT") return PAGE_ORIGIN;
   if (!hasAbsoluteBox(parent)) return null;
   const box = parent.absoluteBoundingBox;
   if (!box) return null;
   return { x: box.x, y: box.y };
+};
+
+/**
+ * True when every selected layer (key object included) has the same parent,
+ * compared by `parent.id`. Page-direct siblings share the PageNode, so they
+ * count as the same parent (spec §9.2). A missing parent is a mismatch.
+ */
+const shareSameParent = (nodes: readonly SceneNode[]): boolean => {
+  if (nodes.length === 0) return false;
+  const firstParent = nodes[0].parent;
+  if (!firstParent) return false;
+  return nodes.every(
+    (node) => node.parent !== null && node.parent.id === firstParent.id,
+  );
+};
+
+type ContainerWithChildren = BaseNode & {
+  readonly children: readonly SceneNode[];
+};
+
+const hasChildren = (node: BaseNode): node is ContainerWithChildren =>
+  "children" in node;
+
+/**
+ * Map of child id -> index within `parent.children` (layer panel order). Built
+ * once per distribute run to tie-break equal axis positions (spec §9.4.1).
+ */
+const getDocumentOrderIndex = (
+  parent: BaseNode | null,
+): Map<string, number> => {
+  const order = new Map<string, number>();
+  if (!parent || !hasChildren(parent)) return order;
+  parent.children.forEach((child, index) => {
+    order.set(child.id, index);
+  });
+  return order;
 };
 
 // Auto Layout parents (layoutMode HORIZONTAL / VERTICAL / GRID) manage their children; direct x/y writes are ignored or
@@ -229,6 +379,9 @@ type SelectionUpdatedMessage = {
   layers: LayerInfo[];
   autoLayoutIds: string[];
   nonMovableIds: string[];
+  // Whether every selected layer (key object included) shares one parent.
+  // Distribute's pre-check (§9.2) needs only this boolean plus autoLayoutIds.
+  sameParent: boolean;
 };
 
 type AlignResultMessage = {
@@ -243,12 +396,30 @@ type AlignErrorMessage = {
   message: string;
 };
 
+// Same shape as AlignResultMessage (spec §5.1). A run-time refusal is reported
+// as `moved: 0, skipped: [], warning: reason` so no extra message type is
+// needed; the UI treats that combination as a refusal, not as "already
+// distributed".
+type DistributeResultMessage = {
+  type: "distribute-result";
+  moved: number;
+  skipped: { id: string; reason: string }[];
+  warning?: string;
+};
+
 type UiToMainMessage =
   | { type: "ui-ready" }
   | {
       type: "align";
       keyObjectId: unknown;
       direction: unknown;
+      closeAfter: unknown;
+    }
+  | {
+      type: "distribute";
+      axis: unknown;
+      keyObjectId: unknown;
+      spacing: unknown;
       closeAfter: unknown;
     }
   | { type: "close" };
@@ -265,9 +436,17 @@ const isUiToMainMessage = (value: unknown): value is UiToMainMessage => {
   return (
     value.type === "ui-ready" ||
     value.type === "align" ||
+    value.type === "distribute" ||
     value.type === "close"
   );
 };
+
+// `null` means "empty field" (automatic spacing). Anything else must be a
+// finite, non-negative number; NaN / Infinity / negatives / wrong types are
+// rejected BEFORE any computation (spec §8).
+const isValidSpacing = (value: unknown): value is number | null =>
+  value === null ||
+  (typeof value === "number" && Number.isFinite(value) && value >= 0);
 
 const postAlignResult = (
   moved: number,
@@ -284,6 +463,20 @@ const postAlignError = (message: string): void => {
   figma.ui.postMessage(payload);
 };
 
+const postDistributeResult = (
+  moved: number,
+  skipped: { id: string; reason: string }[],
+  warning?: string,
+): void => {
+  const message: DistributeResultMessage = {
+    type: "distribute-result",
+    moved,
+    skipped,
+  };
+  if (warning) message.warning = warning;
+  figma.ui.postMessage(message);
+};
+
 // ---------------------------------------------------------------------------
 // Selection snapshot
 // ---------------------------------------------------------------------------
@@ -297,6 +490,7 @@ const sendSelectionUpdate = (): void => {
     nonMovableIds: selection
       .filter((node) => !isMovableNode(node))
       .map((node) => node.id),
+    sameParent: shareSameParent(selection),
   };
   figma.ui.postMessage(message);
 };
@@ -517,6 +711,251 @@ const handleAlign = (
 };
 
 // ---------------------------------------------------------------------------
+// Distribute executor
+// ---------------------------------------------------------------------------
+//
+// Same coordinate path as handleAlign: targets are computed ONCE in page space,
+// then each write re-reads the parent's absolute origin and converts back with
+// absoluteToRelative. No depth sort here: the same-parent constraint means no
+// moving layer can be an ancestor of another (spec §9.4.6).
+//
+// Every refusal is decided BEFORE any computation or write (§5.1, §9.2) and is
+// reported as `moved: 0, skipped, warning: reason`.
+
+const handleDistribute = (
+  rawAxis: unknown,
+  rawKeyObjectId: unknown,
+  rawSpacing: unknown,
+  rawCloseAfter: unknown,
+): void => {
+  // Only an explicit `true` opts in to closing.
+  const closeAfter = rawCloseAfter === true;
+
+  if (!isDistributeAxis(rawAxis)) {
+    postDistributeResult(0, [], "Unknown distribute axis.");
+    return;
+  }
+  const axis = rawAxis;
+
+  if (typeof rawKeyObjectId !== "string" || rawKeyObjectId.length === 0) {
+    postDistributeResult(0, [], "No key object selected.");
+    return;
+  }
+  const keyObjectId = rawKeyObjectId;
+
+  if (!isValidSpacing(rawSpacing)) {
+    postDistributeResult(
+      0,
+      [],
+      "Spacing must be empty or a non-negative number.",
+    );
+    return;
+  }
+  const spacing = rawSpacing;
+
+  const selection = figma.currentPage.selection;
+
+  // Double guard: the UI also disables the buttons in these cases.
+  if (selection.length < 3) {
+    postDistributeResult(0, [], "Select 3 or more layers to distribute.");
+    return;
+  }
+
+  const keyNode = selection.find((node) => node.id === keyObjectId);
+  if (!keyNode) {
+    postDistributeResult(0, [], "The key object is no longer in the selection.");
+    return;
+  }
+
+  if (!shareSameParent(selection)) {
+    postDistributeResult(
+      0,
+      [],
+      "All selected layers must share the same parent.",
+    );
+    return;
+  }
+
+  if (selection.some(isAutoLayoutChild)) {
+    postDistributeResult(
+      0,
+      [],
+      "Auto Layout children cannot be distributed.",
+    );
+    return;
+  }
+
+  const keyRect = getAbsoluteRect(keyNode);
+  if (!keyRect) {
+    postDistributeResult(0, [], "The key object has no bounding box.");
+    return;
+  }
+
+  // Skip rules shared with align's Pass 1 (§9.3). Skipped layers take part in
+  // neither the ordering nor the spacing (§9.4.5).
+  type MovingItem = { node: SceneNode; originalRect: Rect };
+  const moving: MovingItem[] = [];
+  const skipped: { id: string; reason: string }[] = [];
+  const keyIsChildDerived = isChildDerivedBoxNode(keyNode);
+
+  for (const node of selection) {
+    if (node.id === keyNode.id) continue; // the key object never moves
+
+    if (isAncestorOf(node, keyNode)) {
+      skipped.push({
+        id: node.id,
+        reason: `${node.name}: contains the key object — skipped`,
+      });
+      continue;
+    }
+    if (keyIsChildDerived && isAncestorOf(keyNode, node)) {
+      skipped.push({
+        id: node.id,
+        reason: `${node.name}: inside the key object — skipped`,
+      });
+      continue;
+    }
+    if (!isMovableNode(node)) {
+      skipped.push({
+        id: node.id,
+        reason: `${node.name}: cannot be moved directly — skipped`,
+      });
+      continue;
+    }
+    if (isAutoLayoutChild(node)) {
+      skipped.push({
+        id: node.id,
+        reason: `${node.name}: Auto Layout child — skipped`,
+      });
+      continue;
+    }
+    const movingRect = getAbsoluteRect(node);
+    if (!movingRect) {
+      skipped.push({ id: node.id, reason: `${node.name}: no bounding box` });
+      continue;
+    }
+    moving.push({ node, originalRect: movingRect });
+  }
+
+  // Run-time condition (§9.2): only known after the skip rules, so it cannot be
+  // a UI disable. Nothing has been computed or written yet.
+  if (moving.length < 2) {
+    postDistributeResult(
+      0,
+      skipped,
+      "Distribute needs at least 2 movable layers after skipping.",
+    );
+    return;
+  }
+
+  // §9.4.1: axis start ascending, ties broken by document order.
+  const orderIndex = getDocumentOrderIndex(keyNode.parent);
+  const getOrder = (id: string): number => {
+    const index = orderIndex.get(id);
+    return index === undefined ? Number.MAX_SAFE_INTEGER : index;
+  };
+
+  const orderedItems: DistributeItem[] = [
+    { id: keyNode.id, rect: keyRect },
+    ...moving.map((item) => ({ id: item.node.id, rect: item.originalRect })),
+  ];
+  orderedItems.sort((a, b) => {
+    const delta = axisStart(a.rect, axis) - axisStart(b.rect, axis);
+    if (delta !== 0) return delta;
+    return getOrder(a.id) - getOrder(b.id);
+  });
+
+  // Overlapping layers give a negative mean gap, which can reverse the order.
+  // Reject before any write.
+  if (spacing === null && computeAutomaticGap(axis, orderedItems) < 0) {
+    postDistributeResult(
+      0,
+      skipped,
+      "Layers overlap, so automatic spacing is not possible. Enter a spacing value.",
+    );
+    return;
+  }
+
+  const targets = computeDistributedPositions(
+    axis,
+    orderedItems,
+    keyObjectId,
+    spacing,
+  );
+  const movingById = new Map<string, SceneNode>();
+  for (const item of moving) {
+    movingById.set(item.node.id, item.node);
+  }
+
+  // Pass 2 (write only). Targets are fixed now: the key object cannot move, so
+  // recomputing would only risk drift (§9.4.6). The key box is still re-read to
+  // DETECT a change, never to recompute.
+  let moved = 0;
+  let keyRectChanged = false;
+
+  for (const item of orderedItems) {
+    if (item.id === keyNode.id) continue;
+    const node = movingById.get(item.id);
+    const target = targets.get(item.id);
+    if (!node || !target) continue;
+
+    try {
+      const freshKeyRect = getAbsoluteRect(keyNode);
+      if (freshKeyRect && !rectsEqual(freshKeyRect, keyRect)) {
+        keyRectChanged = true;
+      }
+      const parentOrigin = getParentAbsoluteOrigin(node.parent);
+      if (!parentOrigin) {
+        skipped.push({
+          id: node.id,
+          reason: `${node.name}: parent has no bounding box`,
+        });
+        continue;
+      }
+      const relative = absoluteToRelative(target, parentOrigin);
+      node.x = relative.x;
+      node.y = relative.y;
+      const writtenRect = getAbsoluteRect(node);
+      if (
+        !writtenRect ||
+        Math.abs(writtenRect.x - item.rect.x) > POSITION_EPSILON ||
+        Math.abs(writtenRect.y - item.rect.y) > POSITION_EPSILON
+      ) {
+        moved += 1;
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      skipped.push({ id: node.id, reason: `${node.name}: ${detail}` });
+    }
+  }
+
+  // The in-loop checks run before each write, so a change caused by the LAST
+  // write would otherwise go unnoticed.
+  const finalKeyRect = getAbsoluteRect(keyNode);
+  if (finalKeyRect && !rectsEqual(finalKeyRect, keyRect)) {
+    keyRectChanged = true;
+  }
+
+  // Under the same-parent constraint siblings keep their absolute positions
+  // when a container reflows (§9.4.6), so this is effectively unreachable. It
+  // stays as a safety net in case that constraint is ever relaxed.
+  const warning = keyRectChanged
+    ? "The key object's box changed during distribution (a shared container reflowed). Verify the result."
+    : undefined;
+
+  if (closeAfter && skipped.length === 0 && !warning) {
+    figma.closePlugin(
+      moved > 0
+        ? `Distributed ${moved} layer${moved === 1 ? "" : "s"}.`
+        : "Already distributed.",
+    );
+    return;
+  }
+
+  postDistributeResult(moved, skipped, warning);
+};
+
+// ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
 
@@ -536,6 +975,14 @@ figma.ui.onmessage = (raw: unknown) => {
       return;
     case "align":
       handleAlign(raw.keyObjectId, raw.direction, raw.closeAfter);
+      return;
+    case "distribute":
+      handleDistribute(
+        raw.axis,
+        raw.keyObjectId,
+        raw.spacing,
+        raw.closeAfter,
+      );
       return;
     case "close":
       figma.closePlugin();
