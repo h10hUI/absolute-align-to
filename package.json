@@ -4,10 +4,14 @@
   "description": "Align selected layers to a designated key object across frames.",
   "main": "code.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "bundle": "esbuild code.ts --bundle --format=iife --target=es2020 --outfile=code.js",
+    "build": "npm run typecheck && npm run bundle",
+    "watch": "concurrently -n types,bundle -c blue,green \"npm:watch:types\" \"npm:watch:bundle\"",
+    "watch:types": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "watch:bundle": "esbuild code.ts --bundle --format=iife --target=es2020 --outfile=code.js --watch",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "watch": "npm run build -- --watch"
+    "lint:fix": "eslint . --fix"
   },
   "author": "",
   "license": "",

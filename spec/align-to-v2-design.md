@@ -45,7 +45,7 @@ absoluteBoundingBox（ページ空間の絶対座標）
 
 distribute（§9.4）も同じ手順を通す。すなわち、ページ絶対空間で各レイヤーの目標座標を算出し、書き込み直前に読み直した親の絶対原点で親相対座標に変換してから `node.x` / `node.y` に書く。同一親ノード制約（§9.2）があっても近道はせず、align と同一の経路に乗せて座標系の扱いを一本化する。
 
-この往復変換自体は親が異なっていても成立する（親ごとに絶対原点を読み直すため）。したがって distribute で同一親ノードを要求するのは座標変換の都合ではない。理由は、issue の要求（複数のフレームにまたがる選択は使用不可）を「選択レイヤーの親が異なる場合は使用不可」として保守的に一般化した**製品判断**である。この一般化は issue の条件を包含するが、同一フレーム内で別グループに分かれた選択も不可にする（issue より厳しい。緩和の要否は §9.4 の `TODO(distribute):` を参照）。
+この往復変換自体は親が異なっていても成立する（親ごとに絶対原点を読み直すため）。したがって distribute で同一親ノードを要求するのは座標変換の都合ではない。理由は、issue の要求（複数のフレームにまたがる選択は使用不可）を「選択レイヤーの親が異なる場合は使用不可」として保守的に一般化した**製品判断**である。この一般化は issue の条件を包含するが、同一フレーム内で別グループに分かれた選択も不可にする（issue より厳しい）。
 
 親の絶対原点は「直接の親」ではなく、**GROUP / BOOLEAN_OPERATION を飛ばして最初に見つかる祖先（フレーム・ページ等）**の `absoluteBoundingBox` から取る。Figma ではこれらの型は座標系を持たず、子の `x` / `y` は最も近いそれ以外の祖先を基準に表現されるためである（Plugin API の `relativeTransform` の説明を参照）。直接の親の box を原点にすると、グループ内のレイヤーが大きくずれる。この原点は子の移動でグループの bounds が変わっても動かないが、align の Pass2 では念のため書き込み直前に読み直す。distribute も同じ経路を通る。移動対象側の box を書き込みごとに読み直す必要はない（§9.4.6）。§9.3 の key box 変化検知が対象とするのは key object の box だけであり、移動対象側の box 変化は拾わないが、同一親制約下では許容する。
 
@@ -109,16 +109,34 @@ align と同じ経路（UI → main → 結果返却）を使う。差分は次�
 ## 7. ファイル構成
 
 ```
-code.ts          … メインスレッド。selection監視、UIとのpostMessage、整列計算、実処理の呼び出し
-ui.html          … 選択レイヤー一覧表示、key object指定、方向ボタンのイベント処理（インラインJS）
+code.ts             … エントリ。figma.showUI / selectionchange 監視 / ui.onmessage のディスパッチのみ
+src/geometry.ts     … Figma API 非依存の純関数（align / distribute の計算）
+src/messages.ts     … UI とやり取りするメッセージ型と検証ガード
+src/figma-nodes.ts  … ノード・親・座標を扱う Figma 側ヘルパー
+src/selection.ts    … selection スナップショットの送信
+src/align.ts        … align の実行（handleAlign）
+src/distribute.ts   … distribute の実行（handleDistribute）
+ui.html             … 選択レイヤー一覧表示、key object指定、方向ボタンのイベント処理（インラインJS）
 manifest.json
 tsconfig.json
 package.json
 ```
 
-Figma Plugin API は単一スクリプトとして実行されるため、バンドラを導入せず `code.ts` 単体で完結させる。整列計算ロジックは `code.ts` 内の内部関数として実装。UI ロジックも `ui.html` にインラインで記述する。
+Figma Plugin API は単一スクリプトとして実行されるため、ビルド時に 1 ファイルへまとめる。バンドラには esbuild を使い、`code.ts` をエントリとして `code.js`（`manifest.json` の `main`）を出力する。依存関係は import 文として明示されるため、モジュールの初期化順が include 解決順に依存しない（`tsc` の `outFile` + `module: none` は import / export を禁止するため、依存方向を機械的に強制できず不採用）。
 
-## 8. 計算ロジック（align / distribute、code.ts 内の内部関数）
+型検査と出力は分離する。`tsc`（`noEmit: true`）は型検査専用、esbuild は型を見ずにバンドルする。`tsconfig.json` は `module: "esnext"` / `moduleResolution: "bundler"` を指定し、`include` を `code.ts` と `src/**/*.ts` に広げる。`noEmit: true` を併せて指定しないと `src/*.js` が散布され、esbuild の出力と衝突する。
+
+npm scripts は次の構成（`build` は型検査 → バンドルの 2 段）。
+
+- `typecheck` … `tsc -p tsconfig.json`
+- `bundle` … `esbuild code.ts --bundle --format=iife --target=es2020 --outfile=code.js`
+- `build` … `typecheck` が成功した場合のみ `bundle` を実行
+- `watch` … `concurrently` で `watch:types` と `watch:bundle` を同時に起動する（`concurrently` の導入が前提）
+- `watch:types` / `watch:bundle` … それぞれ単独の watch
+
+依存方向は `geometry ← figma-nodes ← selection / align / distribute ← code.ts` の一方向。`messages` は複数モジュールから参照されるが、逆依存は持たない。`align` / `distribute` は `geometry`（純関数）と `figma-nodes`（Figma API に触れるヘルパー。純関数は置かない）の両方を import する。`ui.html` は `code.ts` の型を参照せずメッセージを文字列リテラルで扱うため、分割の影響を受けない。
+
+## 8. 計算ロジック（align / distribute、`src/geometry.ts` の純関数）
 
 ```typescript
 type AlignDirection = "left" | "right" | "top" | "bottom" | "centerH" | "centerV";
@@ -154,7 +172,7 @@ const absoluteToRelative = (
 ): Point => { /* ... */ };
 ```
 
-これらはエクスポートせず `code.ts` 内でのみ使用する。`absoluteToRelative` は実装では `Point`（親の原点）を受け取る。仕様上は `Rect` としていたが原点以外は未使用のため `Point` に改めた。
+これらは `src/geometry.ts` に置き `export` する。`align` / `distribute` はこのモジュールを直接 import し、Figma API には触れない（§7 の依存方向）。`absoluteToRelative` は実装では `Point`（親の原点）を受け取る。仕様上は `Rect` としていたが原点以外は未使用のため `Point` に改めた。
 
 distribute 用にも、Figma API に依存しない純関数を追加する。ページ絶対空間で各レイヤーの目標座標を返し、親相対への変換は既存の `absoluteToRelative` を再利用する。識別子は以下で確定する（UI ラベルの `Space H` / `Space V` はコード上の名前ではない）。
 

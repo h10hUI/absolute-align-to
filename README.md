@@ -45,7 +45,7 @@ npm install
 
 ### Build
 
-The plugin is written in TypeScript and must be compiled to JavaScript before running in Figma. Run the watch task and it will regenerate the JavaScript on every save:
+The plugin is written in TypeScript and must be compiled to JavaScript before running in Figma. `npm run build` type-checks and bundles `code.ts` into `code.js` once. During development, run the watch task: it re-bundles `code.js` and re-runs the type check on every save:
 
 ```sh
 npm run watch
@@ -54,7 +54,8 @@ npm run watch
 ### Project structure
 
 ```
-code.ts       main thread: selection monitoring, postMessage to/from UI, alignment / distribute math, invokes align or distribute
+code.ts       main thread entry: selection monitoring, message dispatch
+src/          geometry (pure math), messages, figma-nodes, selection, align, distribute
 ui.html       inline JS: layer list rendering, key-object selection, direction button handlers
 manifest.json
 tsconfig.json
