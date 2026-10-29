@@ -1,6 +1,6 @@
 ---
 paths:
-    - "code.ts"
+    - "**/*.ts"
 ---
 
 # Figma Rules

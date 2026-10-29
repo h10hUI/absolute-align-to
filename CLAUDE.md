@@ -33,12 +33,20 @@ These are imported, so they are always loaded. Keep them short and imperative.
 ## File Structure
 
 ```
-code.ts       main thread: selection monitoring, postMessage to/from UI, alignment math, invokes alignment
-ui.html       inline JS: layer list rendering, key-object selection, direction button handlers
+code.ts             entry: figma.showUI, selectionchange, ui.onmessage dispatch
+src/geometry.ts     Figma-API-independent align / distribute math
+src/messages.ts     UI <-> main message types and validation guards
+src/figma-nodes.ts  node / parent / coordinate helpers on the Figma side
+src/selection.ts    selection snapshot broadcast
+src/align.ts        align executor (handleAlign)
+src/distribute.ts   distribute executor (handleDistribute)
+ui.html             inline JS: layer list rendering, key-object selection, direction button handlers
 manifest.json
 tsconfig.json
 package.json
 ```
+
+Dependencies point one way: `geometry <- figma-nodes <- selection / align / distribute <- code.ts`.
 
 ## Architecture / Key Rules
 
@@ -80,7 +88,7 @@ All calculations happen in page-absolute space, so alignment works correctly reg
 
 ## Code Conventions
 
-- Keep the alignment math (`computeTargetPosition`, `absoluteToRelative`) as Figma-API-independent helper functions at the top of `code.ts`.
+- Keep the alignment math (`computeTargetPosition`, `absoluteToRelative`) as Figma-API-independent helper functions in `src/geometry.ts`.
 - Add the distribute math as another pure function alongside them, reusing `absoluteToRelative`. Keep the identifiers (direction values, type and function names) aligned with `spec/align-to-v2-design.md` §8; do not introduce names of your own.
 - UI strings are English.
 - Prefer explicit types (e.g. `AlignDirection`, `Rect`).
