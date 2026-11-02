@@ -7,24 +7,27 @@ ul#layers {
   gap: 2px;
   max-height: 220px;
   overflow-y: auto;
-}
-ul#layers li label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-ul#layers li label:hover {
-  background: var(--figma-color-bg-secondary, #f5f5f5);
-}
-ul#layers input[type="radio"] {
-  margin: 0;
-}
-ul#layers .name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+  li label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover {
+      background: var(--figma-color-bg-secondary, #f5f5f5);
+    }
+  }
+
+  input[type="radio"] {
+    margin: 0;
+  }
+
+  .name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

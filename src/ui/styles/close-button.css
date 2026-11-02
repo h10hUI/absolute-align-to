@@ -6,7 +6,8 @@
   background: transparent;
   color: var(--figma-color-text-secondary, #666);
   cursor: pointer;
-}
-#close:hover {
-  color: var(--figma-color-text, #1e1e1e);
+
+  &:hover {
+    color: var(--figma-color-text, #1e1e1e);
+  }
 }

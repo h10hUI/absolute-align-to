@@ -35,6 +35,9 @@ const buildUi = async () => {
   const css = await build({
     entryPoints: [CSS_ENTRY],
     bundle: true,
+    // Lowers CSS nesting to flat rules so the output does not depend on the
+    // Chromium version Figma ships.
+    target: "chrome100",
     write: false,
     outfile: "ui.css",
     logLevel: "warning",

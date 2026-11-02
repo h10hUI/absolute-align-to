@@ -4,8 +4,9 @@
   border-radius: 999px;
   background: var(--figma-color-bg-brand, #0d99ff);
   color: var(--figma-color-text-onbrand, #ffffff);
-}
-.badge.warn {
-  background: var(--figma-color-bg-warning, #ffcd29);
-  color: var(--figma-color-text-warning, #1e1e1e);
+
+  &.warn {
+    background: var(--figma-color-bg-warning, #ffcd29);
+    color: var(--figma-color-text-warning, #1e1e1e);
+  }
 }
