@@ -1,0 +1,58 @@
+#space {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  button {
+    padding: 6px 4px;
+    font-size: 10px;
+    border: 1px solid var(--figma-color-border, #dcdcdc);
+    background: var(--figma-color-bg, #ffffff);
+    color: var(--figma-color-text, #1e1e1e);
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover:not(:disabled) {
+      background: var(--figma-color-bg-secondary, #f5f5f5);
+    }
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+
+  #spacing-input {
+    width: 56px;
+    margin-left: 4px;
+    padding: 5px 4px;
+    font-size: 10px;
+    font-family: inherit;
+    border: 1px solid var(--figma-color-border, #dcdcdc);
+    border-radius: 4px;
+    background: var(--figma-color-bg, #ffffff);
+    color: var(--figma-color-text, #1e1e1e);
+
+    &:focus {
+      border-color: var(--figma-color-border-brand, #0d99ff);
+      outline: 1px solid var(--figma-color-border-brand, #0d99ff);
+      outline-offset: -1px;
+    }
+    &:disabled {
+      opacity: 0.4;
+    }
+  }
+
+  .unit {
+    font-size: 10px;
+    color: var(--figma-color-text-secondary, #666);
+  }
+}
+
+#distribute-hint {
+  font-size: 10px;
+  color: var(--figma-color-text-secondary, #666);
+}
+
+#spacing-error {
+  font-size: 10px;
+  color: var(--figma-color-text-danger, #c00);
+}

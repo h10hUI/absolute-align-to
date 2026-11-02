@@ -1,0 +1,30 @@
+#empty,
+#prompt {
+  font-size: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+#empty {
+  color: var(--figma-color-text-secondary, #666);
+  text-align: center;
+  padding: 12px 8px;
+}
+
+#prompt {
+  color: var(--figma-color-text-secondary, #666);
+  background: var(--figma-color-bg-secondary, #f5f5f5);
+}
+
+#status {
+  font-size: 10px;
+  color: var(--figma-color-text-success, #14ae5c);
+}
+
+#warning {
+  font-size: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--figma-color-bg-warning, #fff1c2);
+  color: var(--figma-color-text-warning, #6e5b00);
+}

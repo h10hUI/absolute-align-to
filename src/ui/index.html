@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      /* @inline-css */
+    </style>
+  </head>
+  <body>
+    <h2>Selected layers (<span id="count">0</span>)</h2>
+    <ul id="layers"></ul>
+    <section id="empty">Select 2 or more layers to align.</section>
+    <section id="prompt" hidden>
+      Choose a key object: the layer the others align to.
+    </section>
+    <label id="close-after">
+      <input type="checkbox" id="close-after-input" role="switch" checked />
+      Close after aligning
+    </label>
+    <section id="directions">
+      <button type="button" data-direction="left">Left</button>
+      <button type="button" data-direction="centerH">Center H</button>
+      <button type="button" data-direction="right">Right</button>
+      <button type="button" data-direction="top">Top</button>
+      <button type="button" data-direction="centerV">Center V</button>
+      <button type="button" data-direction="bottom">Bottom</button>
+    </section>
+    <section id="space">
+      <button type="button" data-axis="horizontal">Space H</button>
+      <button type="button" data-axis="vertical">Space V</button>
+      <input
+        type="text"
+        id="spacing-input"
+        inputmode="decimal"
+        autocomplete="off"
+        aria-label="Spacing in px (empty = automatic)"
+        title="Spacing in px (empty = automatic)"
+      />
+      <span class="unit">px</span>
+    </section>
+    <section id="distribute-hint" hidden></section>
+    <section id="spacing-error" hidden></section>
+    <section id="status" hidden></section>
+    <section id="warning" hidden></section>
+    <button id="close" type="button">Close</button>
+
+    <script>
+      /* @inline-js */
+    </script>
+  </body>
+</html>

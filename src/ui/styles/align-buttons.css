@@ -1,0 +1,22 @@
+#directions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+
+  button {
+    padding: 6px 4px;
+    font-size: 10px;
+    border: 1px solid var(--figma-color-border, #dcdcdc);
+    background: var(--figma-color-bg, #ffffff);
+    color: var(--figma-color-text, #1e1e1e);
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover:not(:disabled) {
+      background: var(--figma-color-bg-secondary, #f5f5f5);
+    }
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+}
