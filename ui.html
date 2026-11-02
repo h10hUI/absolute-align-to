@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
     <style>
@@ -69,9 +69,45 @@
       #close-after {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
         font-size: 10px;
         cursor: pointer;
+        user-select: none;
+      }
+      #close-after-input {
+        appearance: none;
+        -webkit-appearance: none;
+        position: relative;
+        flex: none;
+        width: 28px;
+        height: 16px;
+        margin: 0;
+        border-radius: 999px;
+        background: var(--figma-color-bg-disabled, #dcdcdc);
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      #close-after-input::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--figma-color-bg, #ffffff);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        transition: transform 0.15s ease;
+      }
+      #close-after-input:checked {
+        background: var(--figma-color-bg-brand, #0d99ff);
+      }
+      #close-after-input:checked::after {
+        transform: translateX(12px);
+      }
+      #close-after-input:focus-visible {
+        outline: 2px solid var(--figma-color-border-brand, #0d99ff);
+        outline-offset: 2px;
       }
       #directions {
         display: grid;
@@ -197,7 +233,7 @@
       Choose a key object: the layer the others align to.
     </section>
     <label id="close-after">
-      <input type="checkbox" id="close-after-input" checked />
+      <input type="checkbox" id="close-after-input" role="switch" checked />
       Close after aligning
     </label>
     <section id="directions">
