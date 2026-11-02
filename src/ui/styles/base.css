@@ -1,0 +1,22 @@
+:root {
+  color-scheme: light dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 12px;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--figma-color-text, #1e1e1e);
+  background: var(--figma-color-bg, #ffffff);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+}

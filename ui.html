@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <style>
+      /* src/ui/styles/base.css */
       :root {
         color-scheme: light dark;
       }
@@ -12,7 +13,11 @@
       body {
         margin: 0;
         padding: 12px;
-        font-family: Inter, "Segoe UI", system-ui, sans-serif;
+        font-family:
+          Inter,
+          "Segoe UI",
+          system-ui,
+          sans-serif;
         font-size: 11px;
         color: var(--figma-color-text, #1e1e1e);
         background: var(--figma-color-bg, #ffffff);
@@ -25,6 +30,8 @@
         font-size: 11px;
         font-weight: 600;
       }
+
+      /* src/ui/styles/layer-list.css */
       ul#layers {
         list-style: none;
         margin: 0;
@@ -46,7 +53,7 @@
       ul#layers li label:hover {
         background: var(--figma-color-bg-secondary, #f5f5f5);
       }
-      ul#layers input[type="radio"] {
+      ul#layers input[type=radio] {
         margin: 0;
       }
       ul#layers .name {
@@ -55,6 +62,8 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+
+      /* src/ui/styles/badge.css */
       .badge {
         font-size: 9px;
         padding: 1px 5px;
@@ -66,6 +75,8 @@
         background: var(--figma-color-bg-warning, #ffcd29);
         color: var(--figma-color-text-warning, #1e1e1e);
       }
+
+      /* src/ui/styles/toggle.css */
       #close-after {
         display: flex;
         align-items: center;
@@ -109,6 +120,8 @@
         outline: 2px solid var(--figma-color-border-brand, #0d99ff);
         outline-offset: 2px;
       }
+
+      /* src/ui/styles/align-buttons.css */
       #directions {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -130,6 +143,8 @@
         opacity: 0.4;
         cursor: default;
       }
+
+      /* src/ui/styles/distribute.css */
       #space {
         display: flex;
         align-items: center;
@@ -182,6 +197,8 @@
         font-size: 10px;
         color: var(--figma-color-text-danger, #c00);
       }
+
+      /* src/ui/styles/messages.css */
       #empty,
       #prompt {
         font-size: 10px;
@@ -208,6 +225,8 @@
         background: var(--figma-color-bg-warning, #fff1c2);
         color: var(--figma-color-text-warning, #6e5b00);
       }
+
+      /* src/ui/styles/close-button.css */
       #close {
         align-self: flex-end;
         font-size: 10px;
@@ -220,9 +239,13 @@
       #close:hover {
         color: var(--figma-color-text, #1e1e1e);
       }
+
+      /* src/ui/styles/utilities.css */
       [hidden] {
         display: none !important;
       }
+
+      /* src/ui/styles/index.css */
     </style>
   </head>
   <body>
@@ -264,340 +287,297 @@
     <button id="close" type="button">Close</button>
 
     <script>
-      // NOTE: The `data-direction` values above must stay in sync with the
-      // `AlignDirection` type in code.ts. Change both if you rename a value.
-      // The main thread validates the received value, so a mismatch surfaces
-      // an "align-error" instead of a silent no-op.
-      //
-      // The key object is NEVER auto-selected: spec §10 requires the user to
-      // click a layer, so the buttons stay disabled and #prompt explains why
-      // until a radio is chosen.
-      const state = {
-        keyObjectId: null,
-        layers: [],
-        autoLayoutIds: [],
-        nonMovableIds: [],
-        sameParent: false,
-      };
+      "use strict";
+      (() => {
+        // src/messages.ts
+        var isRecord = (value) => typeof value === "object" && value !== null;
 
-      const countEl = document.getElementById("count");
-      const layersEl = document.getElementById("layers");
-      const emptyEl = document.getElementById("empty");
-      const promptEl = document.getElementById("prompt");
-      const statusEl = document.getElementById("status");
-      const warningEl = document.getElementById("warning");
-      const closeEl = document.getElementById("close");
-      const closeAfterEl = document.getElementById("close-after-input");
-      const directionButtons = document.querySelectorAll(
-        "#directions button"
-      );
-      const distributeButtons = document.querySelectorAll("#space button");
-      const spacingEl = document.getElementById("spacing-input");
-      const distributeHintEl = document.getElementById("distribute-hint");
-      const spacingErrorEl = document.getElementById("spacing-error");
-
-      const setStatus = (text) => {
-        statusEl.textContent = text || "";
-        statusEl.hidden = !text;
-      };
-
-      const setWarning = (text) => {
-        warningEl.textContent = text || "";
-        warningEl.hidden = !text;
-      };
-
-      const setSpacingError = (text) => {
-        spacingErrorEl.textContent = text || "";
-        spacingErrorEl.hidden = !text;
-      };
-
-      const render = () => {
-        const previousScrollTop = layersEl.scrollTop;
-        const listHadFocus = layersEl.contains(document.activeElement);
-
-        countEl.textContent = String(state.layers.length);
-
-        layersEl.replaceChildren();
-        for (const layer of state.layers) {
-          const li = document.createElement("li");
-          const label = document.createElement("label");
-
-          const radio = document.createElement("input");
-          radio.type = "radio";
-          radio.name = "keyObject";
-          radio.value = layer.id;
-          radio.checked = layer.id === state.keyObjectId;
-          radio.addEventListener("change", () => {
-            if (state.keyObjectId === layer.id) return;
-            state.keyObjectId = layer.id;
-            setStatus("");
-            setWarning("");
-            render();
-          });
-
-          const name = document.createElement("span");
-          name.className = "name";
-          name.textContent = layer.name;
-
-          label.appendChild(radio);
-          label.appendChild(name);
-
-          if (layer.id === state.keyObjectId) {
-            const badge = document.createElement("span");
-            badge.className = "badge";
-            badge.textContent = "Key object";
-            label.appendChild(badge);
+        // src/ui/main.ts
+        var state = {
+          keyObjectId: null,
+          layers: [],
+          autoLayoutIds: [],
+          nonMovableIds: [],
+          sameParent: false
+        };
+        var byId = (id, ctor) => {
+          const element = document.getElementById(id);
+          if (!(element instanceof ctor)) {
+            throw new Error(`#${id} is missing or has an unexpected element type`);
           }
-          if (state.autoLayoutIds.includes(layer.id)) {
-            const badge = document.createElement("span");
-            badge.className = "badge warn";
-            badge.textContent = "Auto Layout";
-            label.appendChild(badge);
+          return element;
+        };
+        var countEl = byId("count", HTMLElement);
+        var layersEl = byId("layers", HTMLElement);
+        var emptyEl = byId("empty", HTMLElement);
+        var promptEl = byId("prompt", HTMLElement);
+        var statusEl = byId("status", HTMLElement);
+        var warningEl = byId("warning", HTMLElement);
+        var closeEl = byId("close", HTMLButtonElement);
+        var closeAfterEl = byId("close-after-input", HTMLInputElement);
+        var directionButtons = document.querySelectorAll("#directions button");
+        var distributeButtons = document.querySelectorAll("#space button");
+        var spacingEl = byId("spacing-input", HTMLInputElement);
+        var distributeHintEl = byId("distribute-hint", HTMLElement);
+        var spacingErrorEl = byId("spacing-error", HTMLElement);
+        var postToMain = (message) => {
+          parent.postMessage({ pluginMessage: message }, "*");
+        };
+        var setStatus = (text) => {
+          statusEl.textContent = text;
+          statusEl.hidden = !text;
+        };
+        var setWarning = (text) => {
+          warningEl.textContent = text;
+          warningEl.hidden = !text;
+        };
+        var setSpacingError = (text) => {
+          spacingErrorEl.textContent = text;
+          spacingErrorEl.hidden = !text;
+        };
+        var createBadge = (text, warn) => {
+          const badge = document.createElement("span");
+          badge.className = warn ? "badge warn" : "badge";
+          badge.textContent = text;
+          return badge;
+        };
+        var render = () => {
+          const previousScrollTop = layersEl.scrollTop;
+          const listHadFocus = layersEl.contains(document.activeElement);
+          countEl.textContent = String(state.layers.length);
+          layersEl.replaceChildren();
+          for (const layer of state.layers) {
+            const li = document.createElement("li");
+            const label = document.createElement("label");
+            const radio = document.createElement("input");
+            radio.type = "radio";
+            radio.name = "keyObject";
+            radio.value = layer.id;
+            radio.checked = layer.id === state.keyObjectId;
+            radio.addEventListener("change", () => {
+              if (state.keyObjectId === layer.id) return;
+              state.keyObjectId = layer.id;
+              setStatus("");
+              setWarning("");
+              render();
+            });
+            const name = document.createElement("span");
+            name.className = "name";
+            name.textContent = layer.name;
+            label.appendChild(radio);
+            label.appendChild(name);
+            if (layer.id === state.keyObjectId) {
+              label.appendChild(createBadge("Key object", false));
+            }
+            if (state.autoLayoutIds.includes(layer.id)) {
+              label.appendChild(createBadge("Auto Layout", true));
+            }
+            if (state.nonMovableIds.includes(layer.id) && layer.id !== state.keyObjectId) {
+              label.appendChild(createBadge("Not movable", true));
+            }
+            li.appendChild(label);
+            layersEl.appendChild(li);
           }
-          // Non-key layers that expose no x/y cannot be aligned
-          // directly. Flag them so the user knows why "nothing moves".
-          if (
-            state.nonMovableIds.includes(layer.id) &&
-            layer.id !== state.keyObjectId
-          ) {
-            const badge = document.createElement("span");
-            badge.className = "badge warn";
-            badge.textContent = "Not movable";
-            label.appendChild(badge);
+          const canAlign = state.layers.length >= 2 && state.keyObjectId !== null;
+          for (const button of directionButtons) {
+            button.disabled = !canAlign;
           }
-
-          li.appendChild(label);
-          layersEl.appendChild(li);
-        }
-
-        const canAlign =
-          state.layers.length >= 2 && state.keyObjectId !== null;
-        for (const button of directionButtons) {
-          button.disabled = !canAlign;
-        }
-
-        // Distribute pre-checks (§9.2). These are the conditions the UI can
-        // evaluate without the skip rules. The run-time condition (fewer than
-        // two movable layers after skipping) is decided by the main thread and
-        // cannot disable the buttons here.
-        //
-        // Nothing is evaluated on an empty selection: #empty already explains
-        // the state, and shareSameParent([]) is false, so the parent reason
-        // would be pure noise.
-        const distributeBlockers = [];
-        if (state.layers.length > 0) {
-          if (state.layers.length < 3) {
-            distributeBlockers.push("Select 3 or more layers.");
+          const distributeBlockers = [];
+          if (state.layers.length > 0) {
+            if (state.layers.length < 3) {
+              distributeBlockers.push("Select 3 or more layers.");
+            }
+            if (state.keyObjectId === null) {
+              distributeBlockers.push("Choose a key object.");
+            }
+            if (!state.sameParent) {
+              distributeBlockers.push("All selected layers must share the same parent.");
+            }
+            if (state.autoLayoutIds.length > 0) {
+              distributeBlockers.push("Auto Layout children are not supported.");
+            }
           }
-          if (state.keyObjectId === null) {
-            distributeBlockers.push("Choose a key object.");
+          const canDistribute = state.layers.length > 0 && distributeBlockers.length === 0;
+          for (const button of distributeButtons) {
+            button.disabled = !canDistribute;
           }
-          if (!state.sameParent) {
-            distributeBlockers.push(
-              "All selected layers must share the same parent."
+          spacingEl.disabled = !canDistribute;
+          distributeHintEl.textContent = distributeBlockers.join(" ");
+          distributeHintEl.hidden = distributeBlockers.length === 0;
+          if (!canDistribute) setSpacingError("");
+          emptyEl.hidden = state.layers.length >= 2;
+          promptEl.hidden = !(state.layers.length >= 2 && state.keyObjectId === null);
+          layersEl.scrollTop = previousScrollTop;
+          if (listHadFocus) {
+            const checked = layersEl.querySelector(
+              'input[name="keyObject"]:checked'
             );
+            if (checked) checked.focus();
           }
-          if (state.autoLayoutIds.length > 0) {
-            distributeBlockers.push("Auto Layout children are not supported.");
-          }
+        };
+        for (const button of directionButtons) {
+          button.addEventListener("click", () => {
+            if (!state.keyObjectId) return;
+            postToMain({
+              type: "align",
+              keyObjectId: state.keyObjectId,
+              direction: button.dataset.direction,
+              closeAfter: closeAfterEl.checked
+            });
+          });
         }
-        const canDistribute =
-          state.layers.length > 0 && distributeBlockers.length === 0;
+        var parseSpacing = () => {
+          const raw = spacingEl.value.trim();
+          if (raw === "") return { spacing: null };
+          if (!/^\d+(\.\d+)?$/.test(raw)) return null;
+          return { spacing: Number(raw) };
+        };
         for (const button of distributeButtons) {
-          button.disabled = !canDistribute;
+          button.addEventListener("click", () => {
+            if (!state.keyObjectId) return;
+            const parsed = parseSpacing();
+            if (!parsed) {
+              setSpacingError("Enter a number of px, or leave the field empty.");
+              return;
+            }
+            setSpacingError("");
+            postToMain({
+              type: "distribute",
+              axis: button.dataset.axis,
+              keyObjectId: state.keyObjectId,
+              spacing: parsed.spacing,
+              closeAfter: closeAfterEl.checked
+            });
+          });
         }
-        spacingEl.disabled = !canDistribute;
-        distributeHintEl.textContent = distributeBlockers.join(" ");
-        // Hide when there is nothing to say; an empty section would still add
-        // the flex gap between rows.
-        distributeHintEl.hidden = distributeBlockers.length === 0;
-        // A format error is meaningless once distribute cannot run.
-        if (!canDistribute) setSpacingError("");
-
-        emptyEl.hidden = state.layers.length >= 2;
-        // Covers the "buttons disabled but nothing else is shown" case: 2+
-        // layers selected while no key object is designated (spec §9.2 asks us
-        // to prompt the user to designate one).
-        promptEl.hidden = !(
-          state.layers.length >= 2 && state.keyObjectId === null
-        );
-
-        // Re-rendering replaces every <li>, which resets scroll position and
-        // drops focus. Restore both so picking a key object in a long list does
-        // not jump the view.
-        layersEl.scrollTop = previousScrollTop;
-        if (listHadFocus) {
-          const checked = layersEl.querySelector(
-            'input[name="keyObject"]:checked'
-          );
-          if (checked) checked.focus();
-        }
-      };
-
-      for (const button of directionButtons) {
-        button.addEventListener("click", () => {
-          if (!state.keyObjectId) return;
-          parent.postMessage(
-            {
-              pluginMessage: {
-                type: "align",
-                keyObjectId: state.keyObjectId,
-                direction: button.dataset.direction,
-                closeAfter: closeAfterEl.checked,
-              },
-            },
-            "*"
-          );
+        spacingEl.addEventListener("input", () => {
+          setSpacingError("");
         });
-      }
-
-      // Empty field = automatic spacing (`null`). Otherwise the value must be a
-      // non-negative number (decimals allowed); anything else is not sent.
-      const parseSpacing = () => {
-        const raw = spacingEl.value.trim();
-        if (raw === "") return { spacing: null };
-        if (!/^\d+(\.\d+)?$/.test(raw)) return null;
-        return { spacing: Number(raw) };
-      };
-
-      for (const button of distributeButtons) {
-        button.addEventListener("click", () => {
-          if (!state.keyObjectId) return;
-          const parsed = parseSpacing();
-          if (!parsed) {
-            setSpacingError("Enter a number of px, or leave the field empty.");
+        var renderResult = (message, doneText, alreadyText, warningIsRejection) => {
+          const { moved, skipped } = message;
+          const warning = message.warning ?? "";
+          const rejected = warningIsRejection && moved === 0 && skipped.length === 0 && warning !== "";
+          if (moved > 0) {
+            setStatus(doneText(moved));
+          } else if (skipped.length === 0 && !rejected) {
+            setStatus(alreadyText);
+          } else {
+            setStatus("");
+          }
+          const parts = [];
+          if (skipped.length > 0) {
+            const reasons = skipped.map((item) => item.reason).join(" / ");
+            parts.push(`Skipped ${skipped.length} layer(s): ${reasons}`);
+          }
+          if (warning) parts.push(warning);
+          setWarning(parts.join(" / "));
+        };
+        closeEl.addEventListener("click", () => {
+          postToMain({ type: "close" });
+        });
+        var toStringArray = (value) => Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+        var toLayers = (value) => {
+          const layers = [];
+          if (!Array.isArray(value)) return layers;
+          for (const item of value) {
+            if (isRecord(item) && typeof item.id === "string") {
+              layers.push({
+                id: item.id,
+                name: typeof item.name === "string" ? item.name : ""
+              });
+            }
+          }
+          return layers;
+        };
+        var toSkipped = (value) => {
+          const skipped = [];
+          if (!Array.isArray(value)) return skipped;
+          for (const item of value) {
+            if (isRecord(item)) {
+              skipped.push({
+                id: typeof item.id === "string" ? item.id : "",
+                reason: typeof item.reason === "string" ? item.reason : ""
+              });
+            }
+          }
+          return skipped;
+        };
+        var parseIncoming = (raw) => {
+          if (!isRecord(raw)) return null;
+          if (raw.type === "selection-updated") {
+            return {
+              type: "selection-updated",
+              layers: toLayers(raw.layers),
+              autoLayoutIds: toStringArray(raw.autoLayoutIds),
+              nonMovableIds: toStringArray(raw.nonMovableIds),
+              sameParent: raw.sameParent === true
+            };
+          }
+          if (raw.type === "align-result" || raw.type === "distribute-result") {
+            return {
+              type: raw.type,
+              moved: typeof raw.moved === "number" ? raw.moved : 0,
+              skipped: toSkipped(raw.skipped),
+              warning: typeof raw.warning === "string" ? raw.warning : void 0
+            };
+          }
+          if (raw.type === "align-error") {
+            return {
+              type: "align-error",
+              message: typeof raw.message === "string" ? raw.message : ""
+            };
+          }
+          return null;
+        };
+        window.onmessage = (event) => {
+          const data = event.data;
+          const message = isRecord(data) ? parseIncoming(data.pluginMessage) : null;
+          if (!message) return;
+          if (message.type === "selection-updated") {
+            const lostKeyObject = state.keyObjectId !== null && !message.layers.some((layer) => layer.id === state.keyObjectId);
+            state.layers = message.layers;
+            state.autoLayoutIds = message.autoLayoutIds;
+            state.nonMovableIds = message.nonMovableIds;
+            state.sameParent = message.sameParent;
+            if (lostKeyObject) {
+              state.keyObjectId = null;
+            }
+            setStatus("");
+            setSpacingError("");
+            if (lostKeyObject) {
+              setWarning(
+                "The key object is no longer in the selection. Please choose a new one."
+              );
+            } else {
+              setWarning("");
+            }
+            render();
             return;
           }
-          setSpacingError("");
-          parent.postMessage(
-            {
-              pluginMessage: {
-                type: "distribute",
-                axis: button.dataset.axis,
-                keyObjectId: state.keyObjectId,
-                spacing: parsed.spacing,
-                closeAfter: closeAfterEl.checked,
-              },
-            },
-            "*"
-          );
-        });
-      }
-
-      spacingEl.addEventListener("input", () => {
-        setSpacingError("");
-      });
-
-      // Shared rendering for align-result / distribute-result: same shape,
-      // different wording. `warningIsRejection` marks the distribute case where
-      // the main thread reports a run-time refusal as
-      // { moved: 0, skipped: [], warning: reason }; that must not be shown as
-      // "already distributed".
-      const renderResult = (
-        message,
-        doneText,
-        alreadyText,
-        warningIsRejection
-      ) => {
-        const moved = typeof message.moved === "number" ? message.moved : 0;
-        const skipped = Array.isArray(message.skipped) ? message.skipped : [];
-        const warning =
-          typeof message.warning === "string" ? message.warning : "";
-        const rejected =
-          warningIsRejection &&
-          moved === 0 &&
-          skipped.length === 0 &&
-          warning !== "";
-
-        if (moved > 0) {
-          setStatus(doneText(moved));
-        } else if (skipped.length === 0 && !rejected) {
-          setStatus(alreadyText);
-        } else {
-          setStatus("");
-        }
-
-        const parts = [];
-        if (skipped.length > 0) {
-          const reasons = skipped.map((item) => item.reason).join(" / ");
-          parts.push(`Skipped ${skipped.length} layer(s): ${reasons}`);
-        }
-        if (warning) parts.push(warning);
-        setWarning(parts.join(" / "));
-      };
-
-      closeEl.addEventListener("click", () => {
-        parent.postMessage({ pluginMessage: { type: "close" } }, "*");
-      });
-
-      window.onmessage = (event) => {
-        const message = event.data && event.data.pluginMessage;
-        if (!message) return;
-
-        if (message.type === "selection-updated") {
-          const layers = message.layers || [];
-          const lostKeyObject =
-            state.keyObjectId !== null &&
-            !layers.some((layer) => layer.id === state.keyObjectId);
-
-          state.layers = layers;
-          state.autoLayoutIds = message.autoLayoutIds || [];
-          state.nonMovableIds = message.nonMovableIds || [];
-          state.sameParent = message.sameParent === true;
-
-          if (lostKeyObject) {
-            state.keyObjectId = null;
-          }
-
-          setStatus("");
-          setSpacingError("");
-          if (lostKeyObject) {
-            // The Plugin API cannot lock canvas operations (deletion etc.), so
-            // this is the only place we can detect it. Warn and let the user
-            // pick again — never silently select another layer.
-            setWarning(
-              "The key object is no longer in the selection. Please choose a new one."
+          if (message.type === "align-result") {
+            renderResult(
+              message,
+              (moved) => `Aligned ${moved} layer(s).`,
+              "Already aligned.",
+              false
             );
-          } else {
-            setWarning("");
+            return;
           }
-
-          render();
-          return;
-        }
-
-        if (message.type === "align-result") {
-          renderResult(
-            message,
-            (moved) => `Aligned ${moved} layer(s).`,
-            "Already aligned.",
-            false
-          );
-          return;
-        }
-
-        if (message.type === "distribute-result") {
-          renderResult(
-            message,
-            (moved) => `Distributed ${moved} layer(s).`,
-            "Already distributed.",
-            true
-          );
-          return;
-        }
-
-        if (message.type === "align-error") {
+          if (message.type === "distribute-result") {
+            renderResult(
+              message,
+              (moved) => `Distributed ${moved} layer(s).`,
+              "Already distributed.",
+              true
+            );
+            return;
+          }
           setStatus("");
           setWarning(message.message || "Alignment failed.");
-          return;
-        }
-      };
-
-      // Initial render so the direction buttons start disabled and the
-      // "select layers" hint is visible before the first snapshot arrives.
-      render();
-
-      parent.postMessage({ pluginMessage: { type: "ui-ready" } }, "*");
+        };
+        render();
+        postToMain({ type: "ui-ready" });
+      })();
     </script>
   </body>
 </html>

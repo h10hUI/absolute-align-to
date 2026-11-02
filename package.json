@@ -4,12 +4,15 @@
   "description": "Align selected layers to a designated key object across frames.",
   "main": "code.js",
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json",
     "bundle": "esbuild code.ts --bundle --format=iife --target=es2020 --outfile=code.js",
-    "build": "npm run typecheck && npm run bundle",
-    "watch": "concurrently -n types,bundle -c blue,green \"npm:watch:types\" \"npm:watch:bundle\"",
+    "bundle:ui": "node scripts/build-ui.mjs",
+    "build": "npm run typecheck && npm run bundle && npm run bundle:ui",
+    "watch": "concurrently -n types,types-ui,bundle,ui -c blue,cyan,green,magenta \"npm:watch:types\" \"npm:watch:types:ui\" \"npm:watch:bundle\" \"npm:watch:ui\"",
     "watch:types": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "watch:types:ui": "tsc -p src/ui/tsconfig.json --watch --preserveWatchOutput",
     "watch:bundle": "esbuild code.ts --bundle --format=iife --target=es2020 --outfile=code.js --watch",
+    "watch:ui": "node scripts/build-ui.mjs --watch",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
